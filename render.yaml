@@ -31,4 +31,4 @@ services:
       - key: ADMIN_INIT_PASSWORD
         generateValue: true
       - key: BIZWORK_AUTH_DISABLED
-        value: "true"
+        value: "false"

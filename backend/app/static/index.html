@@ -3,21 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BIZWORK - Quản Trị Kinh Doanh Áo Bóng Đá Nhật Bản</title>
+    <title>BIZWORK - Quản Trị Kinh Doanh Áo Bóng Đá</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
-    <!-- Luckysheet - Enterprise Spreadsheet Engine (Google Sheets Alternative) -->
-    <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet@2.1.13/dist/plugins/css/pluginsCss.css' />
-    <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet@2.1.13/dist/plugins/plugins.css' />
-    <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet@2.1.13/dist/css/luckysheet.css' />
-    <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet@2.1.13/dist/assets/iconfont/iconfont.css' />
-    <script src="https://cdn.jsdelivr.net/npm/luckysheet@2.1.13/dist/plugins/js/plugin.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/luckysheet@2.1.13/dist/luckysheet.umd.js"></script>
+    <!-- Luckysheet Full Self-hosted Styles -->
+    <link rel='stylesheet' href='/static/vendor/pluginsCss.css' />
+    <link rel='stylesheet' href='/static/vendor/luckysheet.css' />
+    <script src="/static/vendor/plugin.js"></script>
+    <script src="/static/vendor/luckysheet.umd.js"></script>
+    <script src="/static/vendor/locale_vi.js"></script>
 
     <style>
-        /* Tooltip hover thumbnail style for @1, @2 */
+        /* Tooltip hover thumbnail chỉ xuất hiện khi di vào ô có @ảnh trên bảng tính */
         #img-hover-tooltip {
             position: fixed;
             display: none;
@@ -73,7 +72,7 @@
                 <img id="lightbox-image" src="" alt="Full view" class="max-h-[68vh] object-contain">
             </div>
             <div class="mt-3 flex items-center justify-between text-xs text-slate-500">
-                <span>Định danh ảnh duy nhất theo CSDL BIZWORK</span>
+                <span>Ảnh định danh gốc trong hệ thống BIZWORK</span>
                 <button onclick="closeFullLightbox()" class="bg-slate-200 hover:bg-slate-300 font-semibold px-4 py-1.5 rounded-lg text-slate-700 transition">Đóng</button>
             </div>
         </div>
@@ -89,7 +88,7 @@
                     </div>
                     <div>
                         <h1 class="text-2xl font-black text-slate-900 tracking-tight">BIZWORK</h1>
-                        <p class="text-xs text-slate-500 font-medium">Japan Football Uniform ERP & Sheets</p>
+                        <p class="text-xs text-slate-500 font-medium">Hệ Thống Quản Trị Kinh Doanh Áo Bóng Đá</p>
                     </div>
                 </div>
 
@@ -109,7 +108,7 @@
                         <input id="login-password" type="password" value="" placeholder="Nhập mật khẩu" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 text-sm">
                     </div>
                     <div id="login-alert" class="hidden p-3 rounded-lg text-xs font-medium"></div>
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-500/25 transition">Đăng Nhập Vào Hệ Thống</button>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-500/25 transition">Đăng Nhập</button>
                 </form>
 
                 <!-- Register Form -->
@@ -120,11 +119,11 @@
                     </div>
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Tên đăng nhập</label>
-                        <input id="reg-username" type="text" placeholder="staff_osaka" required class="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm">
+                        <input id="reg-username" type="text" placeholder="staff_tokyo" required class="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm">
                     </div>
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Email</label>
-                        <input id="reg-email" type="email" placeholder="staff@team.linkpc.net" required class="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm">
+                        <input id="reg-email" type="email" placeholder="staff@bizwork.local" required class="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm">
                     </div>
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Mật khẩu</label>
@@ -147,7 +146,7 @@
                         </div>
                         <div>
                             <span class="font-extrabold text-white text-base tracking-tight">BIZWORK</span>
-                            <span class="block text-[10px] text-blue-400 font-bold">JAPAN FOOTBALL ERP</span>
+                            <span class="block text-[10px] text-blue-400 font-bold">HỆ THỐNG QUẢN LÝ</span>
                         </div>
                     </div>
                     <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">v1.0</span>
@@ -156,8 +155,7 @@
                 <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
                     <a href="#spreadsheets" onclick="navTo('spreadsheets')" class="nav-item flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition active-nav bg-blue-600 text-white">
                         <i class="fa-solid fa-table-cells w-5 text-center text-emerald-400"></i>
-                        <span>Bảng Tính Google Sheets</span>
-                        <span class="ml-auto text-[10px] bg-emerald-950 text-emerald-300 font-bold px-1.5 py-0.5 rounded">100% Pro</span>
+                        <span>Bảng Tính Nội Bộ</span>
                     </a>
                     <a href="#overview" onclick="navTo('overview')" class="nav-item flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition">
                         <i class="fa-solid fa-chart-pie w-5 text-center"></i>
@@ -204,7 +202,7 @@
                 <header class="h-14 bg-white border-b border-slate-200 px-6 flex items-center justify-between flex-shrink-0">
                     <div class="flex items-center space-x-3">
                         <span id="page-title" class="font-bold text-slate-800 text-lg">Bảng Tính Nội Bộ BIZWORK</span>
-                        <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Chuẩn Google Sheets 100%</span>
+                        <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Hệ thống Trực tuyến</span>
                     </div>
                     <div class="flex items-center space-x-4">
                         <div class="flex items-center space-x-1.5 text-xs bg-slate-100 px-3 py-1.5 rounded-lg text-slate-600">
@@ -214,21 +212,19 @@
                     </div>
                 </header>
 
-                <main class="flex-1 overflow-hidden bg-slate-100 p-2 flex flex-col">
-                    <!-- SECTION: SPREADSHEETS (GOOGLE SHEETS FULL ENGINE) -->
-                    <section id="view-spreadsheets" class="view-panel h-full flex flex-col flex-1">
-                        <!-- Top Toolbar for Workbook Selection & Actions -->
+                <main class="flex-1 overflow-hidden bg-slate-100 p-2 flex flex-col relative">
+                    <!-- SECTION: SPREADSHEETS -->
+                    <section id="view-spreadsheets" class="view-panel flex-1 flex flex-col relative w-full h-full overflow-hidden">
                         <div class="bg-white p-2.5 rounded-t-xl border border-slate-200 flex items-center justify-between flex-shrink-0">
                             <div class="flex items-center space-x-3">
-                                <span class="text-xs font-bold text-slate-600">Chọn Sổ Bảng Tính:</span>
+                                <span class="text-xs font-bold text-slate-600">Sổ Bảng Tính:</span>
                                 <select id="workbook-select" onchange="loadWorkbook(this.value)" class="text-xs font-bold text-slate-800 border border-slate-300 rounded-lg px-3 py-1.5 bg-slate-50">
-                                    <!-- 10 sample workbooks populated via API -->
                                 </select>
-                                <span id="save-status" class="text-xs font-medium text-emerald-600"><i class="fa-solid fa-check"></i> Sẵn sàng</span>
+                                <span id="save-status" class="text-xs font-medium text-emerald-600"><i class="fa-solid fa-check"></i> Tự động lưu</span>
                             </div>
                             <div class="flex items-center space-x-2">
                                 <button onclick="saveCurrentLuckysheet()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition shadow-sm">
-                                    <i class="fa-solid fa-floppy-disk mr-1"></i> Lưu Vào CSDL
+                                    <i class="fa-solid fa-floppy-disk mr-1"></i> Lưu Ngay
                                 </button>
                                 <button onclick="exportCurrentWorkbook()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition shadow-sm">
                                     <i class="fa-solid fa-file-excel mr-1"></i> Xuất Excel (XLSX)
@@ -236,8 +232,9 @@
                             </div>
                         </div>
 
-                        <!-- Luckysheet Full Container: Toolbar, Formulas, Wrap, Colors, Drag-fill, Freeze Panes -->
-                        <div id="luckysheet" class="flex-1 w-full bg-white border border-t-0 border-slate-200 rounded-b-xl" style="margin:0px;padding:0px;position:relative;min-height:550px;"></div>
+                        <div class="flex-1 w-full relative bg-white border border-t-0 border-slate-200 rounded-b-xl overflow-hidden">
+                            <div id="luckysheet" style="margin:0px;padding:0px;position:absolute;width:100%;height:100%;left:0;top:0;"></div>
+                        </div>
                     </section>
 
                     <!-- SECTION: OVERVIEW -->
@@ -294,12 +291,39 @@
 
                     <!-- SECTION: MEDIA GALLERY -->
                     <section id="view-media" class="view-panel space-y-4 hidden p-4 overflow-y-auto">
-                        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-                            <div>
-                                <h3 class="text-base font-bold text-slate-800">Thư Viện Ảnh Sản Phẩm & Mã Định Danh @1, @2...</h3>
-                                <p class="text-xs text-slate-500 mt-1">Di chuột vào mã @ trên bảng tính để xem thumbnail, bấm vào logo ảnh để phóng to ảnh sắc nét.</p>
-                            </div>
+                        <!-- Upload & Add Image Card -->
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                            <h3 class="text-base font-bold text-slate-800 mb-1">Thêm Ảnh Sản Phẩm Mới Vào Thư Viện</h3>
+                            <p class="text-xs text-slate-500 mb-4">Ảnh tải lên sẽ được tự động cấp mã @duy nhất (@1, @2, @3...) để gọi nhanh trên bảng tính.</p>
+                            
+                            <form id="upload-image-form" onsubmit="handleUploadCustomImage(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-1">Tên Sản Phẩm / Tên Áo</label>
+                                    <input type="text" id="upload-name-input" placeholder="Ví dụ: Áo Đấu ĐT Nhật Bản Home" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-1">Phân Loại</label>
+                                    <select id="upload-cat-select" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white">
+                                        <option value="jersey">Áo thi đấu (Jersey)</option>
+                                        <option value="logo">Logo / Huy hiệu</option>
+                                        <option value="training">Áo tập luyện</option>
+                                        <option value="custom">Mẫu in theo yêu cầu</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-1">Chọn File Ảnh (PNG, JPG, WebP)</label>
+                                    <input type="file" id="upload-file-input" accept="image/*" required class="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                                </div>
+                                <div>
+                                    <button type="submit" id="upload-submit-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2.5 rounded-lg shadow transition">
+                                        <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Tải Lên & Lưu Tự Động
+                                    </button>
+                                </div>
+                            </form>
+                            <div id="upload-status-alert" class="hidden mt-3 text-xs p-2 rounded-lg font-medium"></div>
                         </div>
+
+                        <!-- Image Cards Grid -->
                         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4" id="media-gallery-grid"></div>
                     </section>
 

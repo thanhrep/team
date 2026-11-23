@@ -1,12 +1,10 @@
-/**
- * BIZWORK Controller with Enterprise Luckysheet Engine
- * Full Google Sheets parity: Formulas, Bold, Cell colors, Column colors, Text wrap, 
- * Dynamic Image Hover Tooltip for @1, @2... and Click-to-enlarge Lightbox.
+﻿/**
+ * BIZWORK Controller - Full Vietnamese Localization & Hover Bugfix
  */
 
 let currentUser = null;
 let currentWorkbook = null;
-let imageCatalog = {}; // Cache for @1, @2... -> Image URLs
+let imageCatalog = {};
 
 document.addEventListener("DOMContentLoaded", () => {
     checkAuth();
@@ -108,6 +106,10 @@ function setupUserUI() {
 }
 
 function navTo(viewName) {
+    // Hide hover tooltip immediately when switching tabs
+    const tooltip = document.getElementById("img-hover-tooltip");
+    if (tooltip) tooltip.style.display = "none";
+
     document.querySelectorAll(".view-panel").forEach(p => p.classList.add("hidden"));
     document.querySelectorAll(".nav-item").forEach(i => i.classList.remove("bg-blue-600", "text-white"));
 
@@ -118,21 +120,21 @@ function navTo(viewName) {
     if (activeNav) activeNav.classList.add("bg-blue-600", "text-white");
 
     const titles = {
-        spreadsheets: "Bảng Tính Nội Bộ BIZWORK (Chuẩn Google Sheets)",
+        spreadsheets: "Bảng Tính Nội Bộ BIZWORK",
         overview: "Tổng Quan Kinh Doanh",
-        products: "Quản Lý Áo Bóng Đá & Đội Tuyển",
+        products: "Danh Mục Sản Phẩm & Size",
         media: "Thư Viện Ảnh @Mã Định Danh",
-        orders: "Quản Lý Đơn Hàng Thị Trường Nhật Bản",
-        users: "Duyệt Tài Khoản & Phân Quyền Bảo Mật"
+        orders: "Quản Lý Đơn Hàng Nhật Bản",
+        users: "Duyệt & Phân Quyền Người Dùng"
     };
     document.getElementById("page-title").innerText = titles[viewName] || "BIZWORK";
 
-    if (viewName === "spreadsheets" && window.luckysheet) {
+    if (viewName === "spreadsheets" && window.luckysheet && window.luckysheet.resize) {
         setTimeout(() => window.luckysheet.resize(), 100);
     }
 }
 
-// Media Catalog Cache for @1, @2 Hover
+// Media Catalog
 async function loadMediaCatalog() {
     try {
         const res = await fetch("/api/media/list");
@@ -152,7 +154,7 @@ async function loadMediaCatalog() {
 }
 
 // ==========================================
-// ENTERPRISE LUCKYSHEET (GOOGLE SHEETS 100%)
+// ENTERPRISE LUCKYSHEET WITH VIETNAMESE LOCALIZATION
 // ==========================================
 async function loadWorkbooksList() {
     const res = await fetch("/api/spreadsheets/workbooks");
@@ -174,11 +176,10 @@ async function loadWorkbook(wbId) {
 
 function initLuckysheetFromWorkbook(wb) {
     const sheetsData = (wb.sheets && wb.sheets.length > 0) ? wb.sheets : [
-        { id: 1, name: "Sheet1", row_count: 84, col_count: 26, data: {} }
+        { id: 1, name: "Trang tính 1", row_count: 84, col_count: 26, data: {} }
     ];
 
     const luckysheetData = sheetsData.map((s, idx) => {
-        // Convert cell JSON into Luckysheet celldata format
         const celldata = [];
         const rawCells = s.data || {};
         
@@ -186,14 +187,13 @@ function initLuckysheetFromWorkbook(wb) {
             const match = cellRef.match(/^([A-Z]+)([0-9]+)$/);
             if (!match) continue;
             const colLetter = match[1];
-            const rowNum = parseInt(match[2], 10) - 1; // 0-based row
+            const rowNum = parseInt(match[2], 10) - 1;
             
-            // Convert column letters A, B -> 0, 1
             let colNum = 0;
             for (let i = 0; i < colLetter.length; i++) {
                 colNum = colNum * 26 + (colLetter.charCodeAt(i) - 64);
             }
-            colNum -= 1; // 0-based col
+            colNum -= 1;
 
             const val = valObj.v !== undefined ? valObj.v : "";
             const formula = valObj.f || "";
@@ -205,15 +205,15 @@ function initLuckysheetFromWorkbook(wb) {
                     v: val,
                     m: String(val),
                     f: formula ? formula : undefined,
-                    bg: rowNum === 0 ? "#f1f5f9" : undefined, // Header styling
-                    bl: rowNum === 0 ? 1 : undefined,         // Header bold
-                    tb: 1 // Text wrap enable by default
+                    bg: rowNum === 0 ? "#f1f5f9" : undefined,
+                    bl: rowNum === 0 ? 1 : undefined,
+                    tb: 1 // Text wrap (xuống dòng) enabled
                 }
             });
         }
 
         return {
-            name: s.name || `Sheet${idx + 1}`,
+            name: s.name || `Trang tính ${idx + 1}`,
             index: idx,
             status: idx === 0 ? 1 : 0,
             order: idx,
@@ -223,23 +223,20 @@ function initLuckysheetFromWorkbook(wb) {
         };
     });
 
-    // Destroy existing luckysheet if any
     if (window.luckysheet && window.luckysheet.destroy) {
         window.luckysheet.destroy();
     }
 
-    // Configure Luckysheet with 100% Google Sheets toolbar features
     const options = {
         container: 'luckysheet',
         title: wb.title,
-        lang: 'en',
+        lang: 'vi',
         showinfobar: false,
         showsheetbar: true,
         showstatisticBar: true,
         sheetFormulaBar: true,
         enableAddRow: true,
         enableAddCol: true,
-        // Full toolbar parity: Bold, Italic, Color, BG, Wrap text, Align, Freeze, Filter, Undo, Sort
         toolbarConfig: {
             undo: true,
             redo: true,
@@ -251,25 +248,25 @@ function initLuckysheetFromWorkbook(wb) {
             moreFormats: true,
             font: true,
             fontSize: true,
-            bold: true,       // Bôi đen chữ
-            italic: true,     // Nghiêng
+            bold: true,
+            italic: true,
             strikethrough: true,
-            underline: true,  // Gạch chân
-            textColor: true,  // Màu chữ
-            fillColor: true,  // Màu nền ô (Màu ô, màu cột)
-            border: true,     // Viền ô
-            mergeCell: true,  // Gộp ô
-            horizontalAlignMode: true, // Căn trái, giữa, phải
-            verticalAlignMode: true,   // Căn trên, giữa, dưới
-            textWrapMode: true,        // Xuống dòng (Wrap text) 100%
+            underline: true,
+            textColor: true,
+            fillColor: true,
+            border: true,
+            mergeCell: true,
+            horizontalAlignMode: true,
+            verticalAlignMode: true,
+            textWrapMode: true,
             textRotateMode: true,
             image: true,
             link: true,
             chart: true,
             postil: true,
             pivotTable: true,
-            function: true,   // Đầy đủ công thức SUM, AVERAGE, VLOOKUP...
-            frozenMode: true, // Cố định hàng / cột (Freeze panes)
+            function: true,
+            frozenMode: true,
             sortAndFilter: true,
             conditionalFormat: true,
             dataVerification: true,
@@ -279,30 +276,68 @@ function initLuckysheetFromWorkbook(wb) {
             protection: true,
             print: true
         },
-        data: luckysheetData
+        data: luckysheetData,
+        hook: {
+            // Auto-save on cell edit
+            cellUpdated: function() {
+                saveCurrentLuckysheet();
+            }
+        }
     };
 
-    window.luckysheet.create(options);
+    setTimeout(() => {
+        window.luckysheet.create(options);
+        setTimeout(() => {
+            if (window.luckysheet && window.luckysheet.resize) {
+                window.luckysheet.resize();
+            }
+            applyVietnameseToolbarTitles();
+        }, 200);
+    }, 50);
 }
 
-// Save Luckysheet data back to Backend Database
+// Translate dropdowns & buttons to Vietnamese
+function applyVietnameseToolbarTitles() {
+    const titles = {
+        "Automatic": "Tự động",
+        "Plain text": "Văn bản thuần túy",
+        "Number": "Số",
+        "Percent": "Phần trăm",
+        "Scientific": "Khoa học",
+        "Accounting": "Kế toán",
+        "Currency": "Tiền tệ",
+        "Date": "Ngày tháng",
+        "Time": "Thời gian",
+        "Time 24H": "Giờ 24H",
+        "Date time": "Ngày & Giờ",
+        "Date time 24 H": "Ngày & Giờ 24H",
+        "Custom formats": "Định dạng khác"
+    };
+
+    document.querySelectorAll(".luckysheet-toolbar-menu-item, .luckysheet-format-list li, span").forEach(el => {
+        const txt = el.innerText.trim();
+        if (titles[txt]) {
+            el.innerText = titles[txt];
+        }
+    });
+}
+
+// Auto-save Luckysheet
 async function saveCurrentLuckysheet() {
     if (!currentWorkbook || !window.luckysheet) return;
     const statusLabel = document.getElementById("save-status");
-    statusLabel.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...`;
+    if (statusLabel) statusLabel.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-blue-600"></i> Đang tự động lưu...`;
 
     const sheets = window.luckysheet.getAllSheets();
     const primarySheet = sheets[0];
     const dataMatrix = primarySheet.data || [];
 
-    // Convert Luckysheet 2D matrix into BIZWORK cell dictionary {"A1": {"v": ...}}
     const convertedData = {};
     for (let r = 0; r < dataMatrix.length; r++) {
         const row = dataMatrix[r] || [];
         for (let c = 0; c < row.length; c++) {
             const cell = row[c];
             if (cell && (cell.v !== undefined || cell.f !== undefined)) {
-                // Convert col index 0, 1 -> A, B
                 let colLetter = "";
                 let tempC = c + 1;
                 while (tempC > 0) {
@@ -327,12 +362,12 @@ async function saveCurrentLuckysheet() {
         body: JSON.stringify({
             sheet_id: firstSheetId,
             data: convertedData,
-            comment: "Cập nhật từ bảng tính Google Sheets Pro"
+            comment: "Tự động lưu"
         })
     });
 
-    if (res.ok) {
-        statusLabel.innerHTML = `<i class="fa-solid fa-cloud-arrow-up text-emerald-600"></i> Đã lưu vào CSDL`;
+    if (res.ok && statusLabel) {
+        statusLabel.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i> Đã lưu tự động`;
         setTimeout(() => statusLabel.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i> Sẵn sàng`, 2000);
     }
 }
@@ -343,7 +378,7 @@ function exportCurrentWorkbook() {
 }
 
 // ==============================================================
-// MÃ @ẢNH: DI CHUỘT HIỆN THUMBNAIL, NHẤN LOGO BẬT ẢNH TO SẮC NÉT
+// MÃ @ẢNH: FIX HOVER BUG - CHỈ KÍCH HOẠT TRÊN BẢNG TÍNH LUCKYSHEET
 // ==============================================================
 function setupImageHoverWatcher() {
     const tooltip = document.getElementById("img-hover-tooltip");
@@ -351,17 +386,25 @@ function setupImageHoverWatcher() {
     const thumbCode = document.getElementById("hover-thumb-code");
 
     document.addEventListener("mouseover", (e) => {
+        // BUGFIX: Chỉ hiển thị tooltip khi chuột di chuyển BÊN TRONG khung bảng tính luckysheet
+        const luckysheetContainer = document.getElementById("luckysheet");
+        if (!luckysheetContainer || !luckysheetContainer.contains(e.target)) {
+            tooltip.style.display = "none";
+            return;
+        }
+
         const text = e.target.innerText || e.target.textContent || "";
         const match = text.match(/@([0-9]+)/);
         if (match) {
             const code = `@${match[1]}`;
             const imgData = imageCatalog[code] || {
-                url: `https://placehold.co/400x400/1e293b/fff?text=${code}`,
-                thumbnail_url: `https://placehold.co/140x140/1e293b/fff?text=${code}`
+                url: `/static/uploads/Ao_Dau_Nhat_Ban_Home_Flame_Blue.png`,
+                thumbnail_url: `/static/uploads/thumbnails/thumb_Ao_Dau_Nhat_Ban_Home_Flame_Blue.png`,
+                display_name: "Áo đấu / Logo"
             };
 
             thumbImg.src = imgData.thumbnail_url;
-            thumbCode.innerText = `${code} (Logo / Áo đấu)`;
+            thumbCode.innerText = `${code}: ${imgData.display_name}`;
             tooltip.style.left = `${Math.min(window.innerWidth - 180, e.clientX + 15)}px`;
             tooltip.style.top = `${Math.min(window.innerHeight - 200, e.clientY + 15)}px`;
             tooltip.style.display = "block";
@@ -370,6 +413,11 @@ function setupImageHoverWatcher() {
 
     document.addEventListener("mousemove", (e) => {
         if (tooltip.style.display === "block") {
+            const luckysheetContainer = document.getElementById("luckysheet");
+            if (!luckysheetContainer || !luckysheetContainer.contains(e.target)) {
+                tooltip.style.display = "none";
+                return;
+            }
             const text = e.target.innerText || e.target.textContent || "";
             if (!text.includes("@") && !tooltip.contains(e.target)) {
                 tooltip.style.display = "none";
@@ -383,7 +431,6 @@ function openFullLightbox(src, code) {
     const lightImg = document.getElementById("lightbox-image");
     const lightCode = document.getElementById("lightbox-code");
     
-    // Use full image if in catalog
     const realImg = imageCatalog[code] ? imageCatalog[code].url : src;
     lightImg.src = realImg;
     lightCode.innerText = code || "@ẢNH";
@@ -394,6 +441,54 @@ function closeFullLightbox() {
     document.getElementById("image-lightbox-modal").classList.add("hidden");
 }
 
+// Upload new image with Custom Name & Auto Save
+async function handleUploadCustomImage(e) {
+    e.preventDefault();
+    const alertBox = document.getElementById("upload-status-alert");
+    const submitBtn = document.getElementById("upload-submit-btn");
+    const nameInput = document.getElementById("upload-name-input");
+    const catSelect = document.getElementById("upload-cat-select");
+    const fileInput = document.getElementById("upload-file-input");
+
+    if (!fileInput.files || fileInput.files.length === 0) return;
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i> Đang tải lên...`;
+    alertBox.classList.add("hidden");
+
+    const formData = new FormData();
+    formData.append("files", fileInput.files[0]);
+    formData.append("category", catSelect.value);
+    formData.append("tags", nameInput.value.trim());
+
+    try {
+        const res = await fetch("/api/media/upload", {
+            method: "POST",
+            body: formData
+        });
+        const data = await res.json();
+        if (res.ok && data.uploaded && data.uploaded.length > 0) {
+            const item = data.uploaded[0];
+            alertBox.className = "mt-3 text-xs p-2.5 rounded-lg font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 block";
+            alertBox.innerHTML = `<strong>Tải lên thành công!</strong> Cấp mã ảnh: <strong>${item.code}</strong> (${nameInput.value.trim()}). Tự động lưu vào hệ thống!`;
+            
+            // Reset form
+            nameInput.value = "";
+            fileInput.value = "";
+            await loadMediaCatalog();
+        } else {
+            alertBox.className = "mt-3 text-xs p-2.5 rounded-lg font-medium bg-rose-50 text-rose-800 border border-rose-200 block";
+            alertBox.innerText = data.detail || "Lỗi tải ảnh lên.";
+        }
+    } catch (err) {
+        alertBox.className = "mt-3 text-xs p-2.5 rounded-lg font-medium bg-rose-50 text-rose-800 border border-rose-200 block";
+        alertBox.innerText = "Lỗi kết nối máy chủ khi upload ảnh.";
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up mr-1"></i> Tải Lên & Lưu Tự Động`;
+    }
+}
+
 // Media Gallery View
 function renderMediaGallery(images) {
     const grid = document.getElementById("media-gallery-grid");
@@ -401,7 +496,7 @@ function renderMediaGallery(images) {
     grid.innerHTML = images.map(img => `
         <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm group hover:shadow-md transition">
             <div class="h-32 bg-slate-100 flex items-center justify-center relative overflow-hidden cursor-pointer" onclick="openFullLightbox('${img.url}', '${img.code}')">
-                <img src="${img.url}" alt="${img.display_name}" class="h-full w-full object-cover group-hover:scale-105 transition" onerror="this.src='https://placehold.co/200x200/1e293b/fff?text=${img.code}'">
+                <img src="${img.url}" alt="${img.display_name}" class="h-full w-full object-cover group-hover:scale-105 transition" onerror="this.src='/static/uploads/thumbnails/thumb_Ao_Dau_Nhat_Ban_Home_Flame_Blue.png'">
                 <span class="absolute top-2 left-2 bg-blue-600 text-white font-black text-xs px-2 py-0.5 rounded shadow">${img.code}</span>
             </div>
             <div class="p-3">

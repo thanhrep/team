@@ -29,10 +29,14 @@ $Python = (Get-Command python -ErrorAction Stop).Source
 if ($LASTEXITCODE -ne 0) { throw "BIZWORK database seed failed. See server/logs/seed.log" }
 
 # Ollama is installed separately and normally runs as a background service.
-$Ollama = Get-Command ollama -ErrorAction SilentlyContinue
-if ($Ollama) {
+$OllamaExe = $env:OLLAMA_EXE
+if (-not $OllamaExe) {
+    $Ollama = Get-Command ollama -ErrorAction SilentlyContinue
+    if ($Ollama) { $OllamaExe = $Ollama.Source }
+}
+if ($OllamaExe -and (Test-Path $OllamaExe)) {
     $ollamaRunning = Get-Process -Name "ollama" -ErrorAction SilentlyContinue
-    if (-not $ollamaRunning) { Start-Process -FilePath $Ollama.Source -ArgumentList "serve" -WindowStyle Hidden }
+    if (-not $ollamaRunning) { Start-Process -FilePath $OllamaExe -ArgumentList "serve" -WindowStyle Hidden }
 }
 
 # Optional: run a pre-created Cloudflare Tunnel without opening router ports.

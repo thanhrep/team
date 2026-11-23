@@ -142,6 +142,7 @@ async function loadMediaCatalog() {
         const res = await fetch("/api/media/list");
         if (!res.ok) return;
         const images = await res.json();
+        imageCatalog = {};
         images.forEach(img => {
             imageCatalog[img.code] = {
                 url: img.url,

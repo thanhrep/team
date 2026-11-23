@@ -518,11 +518,12 @@ async function handleUploadCustomImage(e) {
 
 // Media Gallery View
 function escapeMediaText(value) {
-    return String(value || '').replace(/[&<>\"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[ch]));
+    const map = {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
+    return String(value || "").replace(/[&<>"']/g, ch => map[ch]);
 }
 
 function renderMediaGallery(images) {
-    const grid = document.getElementById('media-gallery-grid');
+    const grid = document.getElementById("media-gallery-grid");
     if (!grid) return;
     grid.innerHTML = images.map(img => {
         const name = escapeMediaText(img.display_name);
@@ -533,25 +534,25 @@ function renderMediaGallery(images) {
             '<span class="absolute top-2 left-2 bg-blue-600 text-white font-black text-xs px-2 py-0.5 rounded shadow">' + code + '</span></div>' +
             '<div class="p-3"><p class="text-xs font-bold text-slate-800 truncate" title="' + name + '">' + name + '</p>' +
             '<p class="text-[10px] text-slate-400 mt-0.5">' + escapeMediaText(img.category) + ' · ' + code + '</p>' +
-            '<div class="flex gap-2 mt-2"><button class="text-[11px] text-blue-700" onclick="renameMediaImage(' + img.id + ', \' ' + name + '\')">Đổi tên</button>' +
+            '<div class="flex gap-2 mt-2"><button class="text-[11px] text-blue-700" onclick="renameMediaImage(' + img.id + ')">Đổi tên</button>' +
             '<button class="text-[11px] text-rose-600" onclick="deleteMediaImage(' + img.id + ', \' ' + code + '\')">Xóa</button></div></div></div>';
-    }).join('');
+    }).join("");
 }
 
-async function renameMediaImage(id, currentName) {
-    const name = prompt('Nhập tên mới cho ảnh:', currentName.trim());
+async function renameMediaImage(id) {
+    const name = prompt("Nhập tên mới cho ảnh:");
     if (!name || !name.trim()) return;
-    const response = await fetch('/api/media/rename/' + id, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:name.trim()})});
+    const response = await fetch("/api/media/rename/" + id, {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({display_name:name.trim()})});
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) { alert(data.detail || 'Không thể đổi tên ảnh.'); return; }
+    if (!response.ok) { alert(data.detail || "Không thể đổi tên ảnh."); return; }
     await loadMediaCatalog();
 }
 
 async function deleteMediaImage(id, code) {
-    if (!confirm('Xóa ảnh ' + code.trim() + '? Nếu ảnh đang được dùng trong sản phẩm hoặc Sheet, hệ thống sẽ chặn xóa.')) return;
-    const response = await fetch('/api/media/delete/' + id, {method:'DELETE'});
+    if (!confirm("Xóa ảnh " + code.trim() + "? Nếu ảnh đang được dùng trong sản phẩm hoặc Sheet, hệ thống sẽ chặn xóa.")) return;
+    const response = await fetch("/api/media/delete/" + id, {method:"DELETE"});
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) { alert(data.detail || 'Không thể xóa ảnh.'); return; }
+    if (!response.ok) { alert(data.detail || "Không thể xóa ảnh."); return; }
     await loadMediaCatalog();
 }
 // Products

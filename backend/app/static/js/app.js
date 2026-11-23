@@ -517,23 +517,43 @@ async function handleUploadCustomImage(e) {
 }
 
 // Media Gallery View
-function renderMediaGallery(images) {
-    const grid = document.getElementById("media-gallery-grid");
-    if (!grid) return;
-    grid.innerHTML = images.map(img => `
-        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm group hover:shadow-md transition">
-            <div class="h-32 bg-slate-100 flex items-center justify-center relative overflow-hidden cursor-pointer" onclick="openFullLightbox('${img.url}', '${img.code}')">
-                <img src="${img.url}" alt="${img.display_name}" class="h-full w-full object-cover group-hover:scale-105 transition" onerror="this.src='/static/uploads/thumbnails/thumb_Ao_Dau_Nhat_Ban_Home_Flame_Blue.png'">
-                <span class="absolute top-2 left-2 bg-blue-600 text-white font-black text-xs px-2 py-0.5 rounded shadow">${img.code}</span>
-            </div>
-            <div class="p-3">
-                <p class="text-xs font-bold text-slate-800 truncate" title="${img.display_name}">${img.display_name}</p>
-                <p class="text-[10px] text-slate-400 mt-0.5">${img.category}</p>
-            </div>
-        </div>
-    `).join("");
+function escapeMediaText(value) {
+    return String(value || '').replace(/[&<>\"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[ch]));
 }
 
+function renderMediaGallery(images) {
+    const grid = document.getElementById('media-gallery-grid');
+    if (!grid) return;
+    grid.innerHTML = images.map(img => {
+        const name = escapeMediaText(img.display_name);
+        const code = escapeMediaText(img.code);
+        return '<div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm group">' +
+            '<div class="h-32 bg-slate-100 flex items-center justify-center relative overflow-hidden cursor-pointer" onclick="openFullLightbox(\'' + img.url + '\', \' ' + code + '\')">' +
+            '<img loading="lazy" src="' + img.thumbnail_url + '" alt="' + name + '" class="h-full w-full object-cover">' +
+            '<span class="absolute top-2 left-2 bg-blue-600 text-white font-black text-xs px-2 py-0.5 rounded shadow">' + code + '</span></div>' +
+            '<div class="p-3"><p class="text-xs font-bold text-slate-800 truncate" title="' + name + '">' + name + '</p>' +
+            '<p class="text-[10px] text-slate-400 mt-0.5">' + escapeMediaText(img.category) + ' · ' + code + '</p>' +
+            '<div class="flex gap-2 mt-2"><button class="text-[11px] text-blue-700" onclick="renameMediaImage(' + img.id + ', \' ' + name + '\')">Đổi tên</button>' +
+            '<button class="text-[11px] text-rose-600" onclick="deleteMediaImage(' + img.id + ', \' ' + code + '\')">Xóa</button></div></div></div>';
+    }).join('');
+}
+
+async function renameMediaImage(id, currentName) {
+    const name = prompt('Nhập tên mới cho ảnh:', currentName.trim());
+    if (!name || !name.trim()) return;
+    const response = await fetch('/api/media/rename/' + id, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:name.trim()})});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) { alert(data.detail || 'Không thể đổi tên ảnh.'); return; }
+    await loadMediaCatalog();
+}
+
+async function deleteMediaImage(id, code) {
+    if (!confirm('Xóa ảnh ' + code.trim() + '? Nếu ảnh đang được dùng trong sản phẩm hoặc Sheet, hệ thống sẽ chặn xóa.')) return;
+    const response = await fetch('/api/media/delete/' + id, {method:'DELETE'});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) { alert(data.detail || 'Không thể xóa ảnh.'); return; }
+    await loadMediaCatalog();
+}
 // Products
 async function loadProducts() {
     const res = await fetch("/api/products/list");

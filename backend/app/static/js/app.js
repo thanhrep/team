@@ -323,21 +323,41 @@ function applyVietnameseToolbarTitles() {
 }
 
 // Auto-save Luckysheet
-async function saveCurrentLuckysheet() {
+let workbookSaveQueue = Promise.resolve();
+
+function saveCurrentLuckysheet() {
+    workbookSaveQueue = workbookSaveQueue
+        .then(() => persistCurrentLuckysheet())
+        .catch(error => {
+            console.error("BIZWORK spreadsheet save failed:", error);
+            const label = document.getElementById("save-status");
+            if (label) label.innerText = "Lỗi lưu dữ liệu - vui lòng thử Lưu Ngay";
+        });
+    return workbookSaveQueue;
+}
+
+async function persistCurrentLuckysheet() {
     if (!currentWorkbook || !window.luckysheet) return;
     const statusLabel = document.getElementById("save-status");
-    if (statusLabel) statusLabel.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-blue-600"></i> Đang tự động lưu...`;
+    if (statusLabel) statusLabel.innerText = "Đang lưu tất cả trang tính...";
 
-    const sheets = window.luckysheet.getAllSheets();
-    const primarySheet = sheets[0];
-    const dataMatrix = primarySheet.data || [];
+    const sheets = window.luckysheet.getAllSheets() || [];
+    const databaseSheets = currentWorkbook.sheets || [];
+    if (sheets.length !== databaseSheets.length) {
+        throw new Error("Số trang tính trên giao diện không khớp dữ liệu máy chủ.");
+    }
 
-    const convertedData = {};
-    for (let r = 0; r < dataMatrix.length; r++) {
-        const row = dataMatrix[r] || [];
-        for (let c = 0; c < row.length; c++) {
-            const cell = row[c];
-            if (cell && (cell.v !== undefined || cell.f !== undefined)) {
+    for (let index = 0; index < sheets.length; index++) {
+        const sheet = sheets[index];
+        const dbSheet = databaseSheets[index];
+        const matrix = sheet.data || [];
+        const convertedData = {};
+
+        for (let r = 0; r < matrix.length; r++) {
+            const row = matrix[r] || [];
+            for (let c = 0; c < row.length; c++) {
+                const cell = row[c];
+                if (!cell || (cell.v === undefined && cell.f === undefined)) continue;
                 let colLetter = "";
                 let tempC = c + 1;
                 while (tempC > 0) {
@@ -345,30 +365,35 @@ async function saveCurrentLuckysheet() {
                     colLetter = String.fromCharCode(65 + rem) + colLetter;
                     tempC = Math.floor((tempC - 1) / 26);
                 }
-                const cellRef = `${colLetter}${r + 1}`;
-                convertedData[cellRef] = {
+                convertedData[colLetter + (r + 1)] = {
                     v: cell.v,
-                    f: cell.f,
-                    s: { bg: cell.bg, bl: cell.bl }
+                    f: cell.f || null,
+                    s: cell.s || { bg: cell.bg, bl: cell.bl }
                 };
             }
         }
+
+        const config = sheet.config || {};
+        const response = await fetch("/api/spreadsheets/save-sheet", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                sheet_id: dbSheet.id,
+                data: convertedData,
+                column_widths: config.columnlen || {},
+                row_heights: config.rowlen || {},
+                comment: "Tự động lưu - " + (dbSheet.name || ("Sheet " + (index + 1)))
+            })
+        });
+        if (!response.ok) {
+            const detail = await response.text();
+            throw new Error("Không lưu được " + dbSheet.name + ": " + detail);
+        }
     }
 
-    const firstSheetId = currentWorkbook.sheets && currentWorkbook.sheets[0] ? currentWorkbook.sheets[0].id : 1;
-    const res = await fetch("/api/spreadsheets/save-sheet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            sheet_id: firstSheetId,
-            data: convertedData,
-            comment: "Tự động lưu"
-        })
-    });
-
-    if (res.ok && statusLabel) {
-        statusLabel.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i> Đã lưu tự động`;
-        setTimeout(() => statusLabel.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i> Sẵn sàng`, 2000);
+    if (statusLabel) {
+        statusLabel.innerText = "Đã lưu tất cả " + sheets.length + " trang tính";
+        setTimeout(() => { statusLabel.innerText = "Sẵn sàng"; }, 2500);
     }
 }
 

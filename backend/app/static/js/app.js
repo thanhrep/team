@@ -124,11 +124,13 @@ function navTo(viewName) {
         overview: "Tổng Quan Kinh Doanh",
         products: "Danh Mục Sản Phẩm & Size",
         media: "Thư Viện Ảnh @Mã Định Danh",
+        ai: "BIZWORK AI – Báo Cáo & Phân Tích",
         orders: "Quản Lý Đơn Hàng Nhật Bản",
         users: "Duyệt & Phân Quyền Người Dùng"
     };
     document.getElementById("page-title").innerText = titles[viewName] || "BIZWORK";
 
+    if (viewName === "ai") checkBizworkAI();
     if (viewName === "spreadsheets" && window.luckysheet && window.luckysheet.resize) {
         setTimeout(() => window.luckysheet.resize(), 100);
     }
@@ -642,4 +644,51 @@ async function loadOverview() {
     } catch (error) {
         console.error("Không thể tải tổng quan BIZWORK:", error);
     }
+}
+
+
+async function checkBizworkAI() {
+    const label = document.getElementById("ai-server-status");
+    if (!label) return;
+    try {
+        const response = await fetch("/api/ai/status");
+        const data = await response.json();
+        label.textContent = data.available ? ("AI sẵn sàng · " + data.model) : "Ollama chưa kết nối";
+        label.className = data.available ? "text-xs text-emerald-600" : "text-xs text-amber-600";
+    } catch (_) { label.textContent = "Không kiểm tra được AI"; }
+}
+
+async function sendBizworkAI(event) {
+    event.preventDefault();
+    const input = document.getElementById("ai-question");
+    const output = document.getElementById("ai-chat-output");
+    const question = input.value.trim();
+    if (!question) return;
+    const userBubble = document.createElement("div");
+    userBubble.className = "ml-auto max-w-[85%] bg-blue-600 text-white rounded-xl p-3 text-sm whitespace-pre-wrap";
+    userBubble.textContent = question;
+    output.appendChild(userBubble);
+    const answer = document.createElement("div");
+    answer.className = "mr-auto max-w-[95%] bg-slate-100 text-slate-800 rounded-xl p-3 text-sm whitespace-pre-wrap";
+    answer.textContent = "Đang đọc dữ liệu Sheet và phân tích...";
+    output.appendChild(answer);
+    input.value = "";
+    output.scrollTop = output.scrollHeight;
+    try {
+        const response = await fetch("/api/ai/chat", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question:question,workbook_id:(currentWorkbook ? currentWorkbook.id : null)})});
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            answer.textContent = err.detail || "Không thể xử lý yêu cầu AI.";
+            return;
+        }
+        answer.textContent = "";
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+            const part = await reader.read();
+            if (part.done) break;
+            answer.textContent += decoder.decode(part.value, {stream:true});
+            output.scrollTop = output.scrollHeight;
+        }
+    } catch (_) { answer.textContent = "Lỗi kết nối AI. Kiểm tra máy chủ Ollama."; }
 }

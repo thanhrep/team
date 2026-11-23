@@ -7,7 +7,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-bizwork_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-BizworkSecurePass2026!}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-bizwork_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -27,7 +27,8 @@ services:
       - db
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-bizwork_user}:${POSTGRES_PASSWORD:-BizworkSecurePass2026!}@db:5432/${POSTGRES_DB:-bizwork_db}
-      SECRET_KEY: ${SECRET_KEY:-bizwork-super-secret-key-japan-football-2026-production}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://team.linkpc.net}
     volumes:
       - ./backend/app/static/uploads:/app/app/static/uploads
     networks:

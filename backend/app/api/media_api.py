@@ -3,6 +3,7 @@ import io
 import uuid
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from PIL import Image
 from app.core.database import get_db
@@ -11,7 +12,7 @@ from app.models.database import MediaImage, ImageTag, User, UserRoleEnum, Produc
 
 router = APIRouter(prefix="/media", tags=["Media Images"])
 
-UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static", "uploads"))
+UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "media"))
 THUMBNAIL_DIR = os.path.join(UPLOAD_DIR, "thumbnails")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -50,8 +51,8 @@ def list_images(
             "description": img.description,
             "category": img.category,
             "file_size": img.file_size,
-            "url": f"/static/uploads/{os.path.basename(img.file_path)}",
-            "thumbnail_url": f"/static/uploads/thumbnails/{os.path.basename(img.thumbnail_path)}",
+            "url": f"/api/media/file/{img.id}",
+            "thumbnail_url": f"/api/media/thumbnail/{img.id}",
             "tags": [t.name for t in img.tags],
             "created_at": img.created_at.isoformat() if img.created_at else None
         }
@@ -159,8 +160,8 @@ async def upload_images(
             "id": media_img.id,
             "code": media_img.code,
             "display_name": media_img.display_name,
-            "thumbnail_url": f"/static/uploads/thumbnails/{thumb_filename}",
-            "url": f"/static/uploads/{unique_filename}"
+            "thumbnail_url": f"/api/media/thumbnail/{media_img.id}",
+            "url": f"/api/media/file/{media_img.id}"
         })
 
     return {"success": True, "uploaded": results}
@@ -194,3 +195,36 @@ def delete_image(
     db.delete(img)
     db.commit()
     return {"success": True, "message": f"Đã xóa ảnh {img.code}."}
+
+
+@router.get("/file/{image_id}")
+def get_image_file(image_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    img = db.query(MediaImage).filter(MediaImage.id == image_id).first()
+    if not img or not os.path.isfile(img.file_path):
+        raise HTTPException(status_code=404, detail="Không tìm thấy tệp ảnh.")
+    return FileResponse(img.file_path, media_type=img.mime_type or "application/octet-stream",
+        headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff"})
+
+@router.get("/thumbnail/{image_id}")
+def get_image_thumbnail(image_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    img = db.query(MediaImage).filter(MediaImage.id == image_id).first()
+    if not img or not os.path.isfile(img.thumbnail_path):
+        raise HTTPException(status_code=404, detail="Không tìm thấy ảnh xem trước.")
+    return FileResponse(img.thumbnail_path, media_type="image/webp",
+        headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff"})
+
+class RenameImageRequest(BaseModel):
+    display_name: str
+
+@router.patch("/rename/{image_id}")
+def rename_image(image_id: int, req: RenameImageRequest, db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.ADMIN, UserRoleEnum.MANAGER))):
+    name = req.display_name.strip()
+    if not name or len(name) > 255:
+        raise HTTPException(status_code=400, detail="Tên ảnh phải có từ 1 đến 255 ký tự.")
+    img = db.query(MediaImage).filter(MediaImage.id == image_id).first()
+    if not img:
+        raise HTTPException(status_code=404, detail="Không tìm thấy ảnh.")
+    img.display_name = name
+    db.commit()
+    return {"success": True, "id": img.id, "code": img.code, "display_name": img.display_name}

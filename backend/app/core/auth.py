@@ -1,3 +1,4 @@
+import os
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -7,11 +8,31 @@ from app.models.database import User, UserRoleEnum, UserStatusEnum, AuditLog
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
+
 def get_current_user(
     request: Request,
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ) -> User:
+    # Temporary public test mode. Enable only on an isolated test deployment.
+    # Keep the real authentication flow unchanged when the flag is disabled.
+    if os.getenv("BIZWORK_AUTH_DISABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
+        test_admin = (
+            db.query(User)
+            .filter(
+                User.role == UserRoleEnum.SUPER_ADMIN,
+                User.status == UserStatusEnum.APPROVED
+            )
+            .order_by(User.id.asc())
+            .first()
+        )
+        if not test_admin:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Chế độ dùng thử chưa được khởi tạo. Vui lòng kiểm tra bước seed dữ liệu."
+            )
+        return test_admin
+
     # Support cookie or Authorization header
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
@@ -39,7 +60,7 @@ def get_current_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Người dùng không tồn tại.")
 
-    # CRITICAL: Strict Approval Check
+    # Strict approval check remains active outside test mode.
     if user.status != UserStatusEnum.APPROVED:
         if user.status == UserStatusEnum.PENDING:
             raise HTTPException(
@@ -59,10 +80,11 @@ def get_current_user(
 
     return user
 
+
 def require_roles(*allowed_roles: UserRoleEnum):
     def role_checker(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role == UserRoleEnum.SUPER_ADMIN:
-            return current_user # Super Admin always bypasses role restrictions
+            return current_user
         if current_user.role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -70,6 +92,7 @@ def require_roles(*allowed_roles: UserRoleEnum):
             )
         return current_user
     return role_checker
+
 
 def log_audit(
     db: Session,

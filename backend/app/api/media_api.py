@@ -99,44 +99,61 @@ async def upload_images(
         ext = os.path.splitext(file.filename or "")[1].lower()
         if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
             raise HTTPException(status_code=400, detail=f"Định dạng ảnh không được hỗ trợ: {file.filename}")
+
+        content = await file.read()
+        if not content or len(content) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Ảnh phải có dung lượng từ 1 byte đến 10 MB.")
+        try:
+            with Image.open(io.BytesIO(content)) as check_image:
+                image_format = check_image.format
+                check_image.verify()
+            if image_format not in allowed_formats:
+                raise ValueError("Unsupported image format")
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Tệp {file.filename} không phải ảnh hợp lệ.")
+
+        unique_filename = f"{uuid.uuid4().hex}{allowed_formats[image_format]}"
+        saved_file_path = os.path.join(UPLOAD_DIR, unique_filename)
+        thumb_filename = f"thumb_{uuid.uuid4().hex}.webp"
+        saved_thumb_path = os.path.join(THUMBNAIL_DIR, thumb_filename)
+
         try:
             with Image.open(io.BytesIO(content)) as im:
                 im.thumbnail((160, 160))
-                im.convert("RGB" if im.mode not in ("RGBA", "LA") else "RGBA").save(saved_thumb_path, "WEBP", quality=80)
+                im.save(saved_thumb_path, "WEBP", quality=80)
             with open(saved_file_path, "wb") as output_file:
                 output_file.write(content)
+
+            media_img = MediaImage(
+                code=f"pending-{uuid.uuid4().hex}",
+                original_filename=os.path.basename(file.filename or "upload"),
+                display_name=(display_name.strip()[:255] or os.path.splitext(os.path.basename(file.filename or "Ảnh"))[0]),
+                file_path=saved_file_path,
+                thumbnail_path=saved_thumb_path,
+                file_size=len(content),
+                mime_type={"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}[image_format],
+                category=category
+            )
+            db.add(media_img)
+            db.flush()
+            media_img.code = f"@{media_img.id}"
+
+            for tag_name in tag_list:
+                tag_obj = db.query(ImageTag).filter(ImageTag.name == tag_name).first()
+                if not tag_obj:
+                    tag_obj = ImageTag(name=tag_name)
+                    db.add(tag_obj)
+                    db.flush()
+                media_img.tags.append(tag_obj)
+
+            db.commit()
+            db.refresh(media_img)
         except Exception:
+            db.rollback()
             for path in (saved_file_path, saved_thumb_path):
                 if os.path.exists(path):
                     os.remove(path)
-            raise HTTPException(status_code=400, detail=f"Không thể xử lý ảnh {file.filename}.")
-
-        media_img = MediaImage(
-            code=f"pending-{uuid.uuid4().hex}",
-            original_filename=os.path.basename(file.filename or "upload"),
-            display_name=(display_name.strip()[:255] or os.path.splitext(os.path.basename(file.filename or "Ảnh"))[0]),
-            file_path=saved_file_path,
-            thumbnail_path=saved_thumb_path,
-            file_size=len(content),
-            mime_type={"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}[image_format],
-            category=category
-        )
-        db.add(media_img)
-        db.flush()
-        # Immutable ID-based code remains unique under concurrent uploads.
-        media_img.code = f"@{media_img.id}"
-
-        # Handle tags
-        for t_name in tag_list:
-            tag_obj = db.query(ImageTag).filter(ImageTag.name == t_name).first()
-            if not tag_obj:
-                tag_obj = ImageTag(name=t_name)
-                db.add(tag_obj)
-                db.flush()
-            media_img.tags.append(tag_obj)
-
-        db.commit()
-        db.refresh(media_img)
+            raise
 
         results.append({
             "id": media_img.id,

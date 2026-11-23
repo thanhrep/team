@@ -12,6 +12,7 @@ from app.api.media_api import router as media_router
 from app.api.products_api import router as products_router
 from app.api.orders_api import router as orders_router
 from app.api.spreadsheets_api import router as spreadsheets_router
+from app.api.ai_api import router as ai_router
 
 app = FastAPI(
     title="BIZWORK - Hệ Thống Quản Lý Doanh Nghiệp Áo Bóng Đá Nhật Bản",
@@ -48,6 +49,7 @@ app.include_router(media_router, prefix="/api")
 app.include_router(products_router, prefix="/api")
 app.include_router(orders_router, prefix="/api")
 app.include_router(spreadsheets_router, prefix="/api")
+app.include_router(ai_router, prefix="/api")
 
 @app.on_event("startup")
 def on_startup():

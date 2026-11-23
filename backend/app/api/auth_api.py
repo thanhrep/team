@@ -90,7 +90,7 @@ def login(req: LoginRequest, response: Response, request: Request, db: Session =
         value=token,
         httponly=True,
         samesite="lax",
-        secure=(request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "").lower() == "https")
+        secure=(request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "").lower() == "https"),
         max_age=86400
     )
 

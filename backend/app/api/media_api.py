@@ -170,7 +170,6 @@ async def upload_images(
 @router.delete("/delete/{image_id}")
 def delete_image(
     image_id: int,
-    confirm_force: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.ADMIN))
 ):
@@ -182,7 +181,7 @@ def delete_image(
     if len(img.products) > 0:
         raise HTTPException(
             status_code=400,
-            detail=f"Ảnh {img.code} đang được sử dụng trong {len(img.products)} sản phẩm. Hãy xác nhận confirm_force=True nếu muốn xóa triệt để."
+            detail=f"Ảnh {img.code} đang được sử dụng trong {len(img.products)} sản phẩm. Hãy gỡ ảnh khỏi sản phẩm trước khi xóa."
         )
 
     def contains_code(value):

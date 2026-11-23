@@ -14,12 +14,12 @@ This folder documents the intended always-on Windows host for the BIZWORK web ap
 
 1. Install 64-bit Python 3.11+, PostgreSQL, and Ollama on the server PC.
 2. Install Ollama model: `ollama pull llama3.2:1b`.
-3. Create a PostgreSQL database and user; set `DATABASE_URL` in the server environment.
+3. Copy `server/.env.server.example` to `server/.env.server` and set the database password, a random `SECRET_KEY`, and a strong `ADMIN_INIT_PASSWORD`. Keep `BIZWORK_AUTH_DISABLED=false`.
 4. Install backend dependencies: `python -m pip install -r backend/requirements.txt`.
-5. Set a long random `SECRET_KEY`; keep `BIZWORK_AUTH_DISABLED=false`.
-6. Seed the initial administrator using the documented seed environment variables. Never publish the seed password.
-7. Start the app once and verify `/api/health`, `/api/ai/status`, login and media upload.
-8. Configure a Windows Scheduled Task to run `start-bizwork.ps1` at system startup.
+5. Install Ollama and pull `llama3.2:1b`. If the startup task runs as SYSTEM, set `OLLAMA_EXE` and `OLLAMA_MODELS` to machine-accessible paths in `.env.server`, and pull the model into that same model directory.
+6. Run `server/windows/start-bizwork.ps1` once from an elevated PowerShell window and verify `/api/health`, `/api/ai/status`, employee login and media upload.
+7. Run `server/windows/install-autostart-task.ps1` from elevated PowerShell to create the Windows startup task.
+8. Configure the existing public hostname only after confirming its DNS provider supports the chosen tunnel or reverse-proxy arrangement.
 
 ## Image storage
 

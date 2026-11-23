@@ -457,9 +457,9 @@ async function handleUploadCustomImage(e) {
     alertBox.classList.add("hidden");
 
     const formData = new FormData();
-    formData.append("files", fileInput.files[0]);
+    Array.from(fileInput.files).forEach(file => formData.append("files", file));
     formData.append("category", catSelect.value);
-    formData.append("tags", nameInput.value.trim());
+    formData.append("display_name", nameInput.value.trim());
 
     try {
         const res = await fetch("/api/media/upload", {
@@ -468,9 +468,9 @@ async function handleUploadCustomImage(e) {
         });
         const data = await res.json();
         if (res.ok && data.uploaded && data.uploaded.length > 0) {
-            const item = data.uploaded[0];
+            const codes = data.uploaded.map(image => image.code).join(", ");
             alertBox.className = "mt-3 text-xs p-2.5 rounded-lg font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 block";
-            alertBox.innerHTML = `<strong>Tải lên thành công!</strong> Cấp mã ảnh: <strong>${item.code}</strong> (${nameInput.value.trim()}). Tự động lưu vào hệ thống!`;
+            alertBox.innerText = "Tải lên thành công " + data.uploaded.length + " ảnh. Mã ảnh: " + codes + ". Tên hiển thị: " + nameInput.value.trim() + ".";
             
             // Reset form
             nameInput.value = "";

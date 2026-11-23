@@ -75,8 +75,8 @@ def resolve_image_code(code: str, db: Session = Depends(get_db), user: User = De
         "id": img.id,
         "code": img.code,
         "display_name": img.display_name,
-        "url": f"/static/uploads/{os.path.basename(img.file_path)}",
-        "thumbnail_url": f"/static/uploads/thumbnails/{os.path.basename(img.thumbnail_path)}"
+        "url": f"/api/media/file/{img.id}",
+        "thumbnail_url": f"/api/media/thumbnail/{img.id}"
     }
 
 @router.post("/upload")
@@ -179,11 +179,23 @@ def delete_image(
         raise HTTPException(status_code=404, detail="Không tìm thấy ảnh.")
 
     # Check reference integrity: Is image used in products?
-    if len(img.products) > 0 and not confirm_force:
+    if len(img.products) > 0:
         raise HTTPException(
             status_code=400,
             detail=f"Ảnh {img.code} đang được sử dụng trong {len(img.products)} sản phẩm. Hãy xác nhận confirm_force=True nếu muốn xóa triệt để."
         )
+
+    def contains_code(value):
+        if isinstance(value, str):
+            return img.code in value
+        if isinstance(value, dict):
+            return any(contains_code(v) for v in value.values())
+        if isinstance(value, list):
+            return any(contains_code(v) for v in value)
+        return False
+    referenced_sheets = [sheet.id for sheet in db.query(WorkbookSheet).all() if contains_code(sheet.data or {})]
+    if referenced_sheets:
+        raise HTTPException(status_code=409, detail=f"Ảnh {img.code} đang được sử dụng trong {len(referenced_sheets)} trang tính. Hãy gỡ tham chiếu trước khi xóa.")
 
     # Clean up physical files
     if os.path.exists(img.file_path):

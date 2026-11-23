@@ -4,7 +4,14 @@ from typing import Optional, Any
 from jose import JWTError, jwt
 import bcrypt
 
-SECRET_KEY = os.getenv("SECRET_KEY", "bizwork-super-secret-key-japan-football-2026-production")
+SECRET_KEY = os.getenv("SECRET_KEY")
+
+
+def _secret_key() -> str:
+    key = os.getenv("SECRET_KEY")
+    if not key or len(key) < 32:
+        raise RuntimeError("SECRET_KEY must be configured with at least 32 characters.")
+    return key
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 24 hours
 
@@ -25,11 +32,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, _secret_key(), algorithm=ALGORITHM)
 
 def decode_token(token: str) -> Optional[dict]:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, _secret_key(), algorithms=[ALGORITHM])
         return payload
     except JWTError:
         return None

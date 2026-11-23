@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 from datetime import datetime
 from app.core.database import get_db
@@ -10,14 +10,14 @@ from app.models.database import User, UserRoleEnum, UserStatusEnum
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 class RegisterRequest(BaseModel):
-    username: str
+    username: str = Field(min_length=3, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$")
     email: EmailStr
-    full_name: str
-    password: str
+    full_name: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=10, max_length=72)
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=72)
 
 class ApproveUserRequest(BaseModel):
     user_id: int
@@ -29,14 +29,9 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     if db.query(User).filter((User.username == req.username) | (User.email == req.email)).first():
         raise HTTPException(status_code=400, detail="Tên đăng nhập hoặc Email đã tồn tại.")
 
-    # Rule: Check if first user in database -> Make SUPER_ADMIN, else PENDING
-    user_count = db.query(User).count()
-    if user_count == 0:
-        role = UserRoleEnum.SUPER_ADMIN
-        status_val = UserStatusEnum.APPROVED
-    else:
-        role = UserRoleEnum.STAFF
-        status_val = UserStatusEnum.PENDING
+    # Public registration never grants privileged access. The initial administrator is provisioned only by seed.py.
+    role = UserRoleEnum.STAFF
+    status_val = UserStatusEnum.PENDING
 
     new_user = User(
         username=req.username,
@@ -54,10 +49,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
 
     return {
         "success": True,
-        "message": "Đăng ký thành công! " + (
-            "Tài khoản đầu tiên đã được thiết lập SUPER_ADMIN." if user_count == 0
-            else "Tài khoản đang ở trạng thái PENDING. Vui lòng đợi Quản trị viên duyệt trước khi có thể đăng nhập xem dữ liệu."
-        ),
+        "message": "Đăng ký thành công. Tài khoản đang chờ Quản trị viên duyệt trước khi được phép truy cập dữ liệu.",
         "status": status_val.value
     }
 
@@ -98,7 +90,7 @@ def login(req: LoginRequest, response: Response, request: Request, db: Session =
         value=token,
         httponly=True,
         samesite="lax",
-        secure=False, # True if behind SSL
+        secure=(request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "").lower() == "https"),
         max_age=86400
     )
 
@@ -106,7 +98,6 @@ def login(req: LoginRequest, response: Response, request: Request, db: Session =
 
     return {
         "success": True,
-        "token": token,
         "user": {
             "id": user.id,
             "username": user.username,
@@ -164,9 +155,16 @@ def approve_user(
     if not target:
         raise HTTPException(status_code=404, detail="Không tìm thấy người dùng.")
 
-    # Guard: only SUPER_ADMIN can alter SUPER_ADMIN role or another ADMIN
-    if target.role == UserRoleEnum.SUPER_ADMIN and admin.role != UserRoleEnum.SUPER_ADMIN:
-        raise HTTPException(status_code=403, detail="Chỉ có Super Admin mới có quyền thao tác trên tài khoản Super Admin.")
+    # Only Super Admin may grant or revoke administrator-level roles.
+    privileged_roles = {UserRoleEnum.SUPER_ADMIN, UserRoleEnum.ADMIN}
+    if admin.role != UserRoleEnum.SUPER_ADMIN and (target.role in privileged_roles or req.role in privileged_roles):
+        raise HTTPException(status_code=403, detail="Chỉ Super Admin mới được quản lý hoặc cấp quyền Admin/Super Admin.")
+    if target.id == admin.id and req.status != UserStatusEnum.APPROVED:
+        raise HTTPException(status_code=400, detail="Không thể tự khóa hoặc tự từ chối tài khoản đang đăng nhập.")
+    if target.role == UserRoleEnum.SUPER_ADMIN and req.status != UserStatusEnum.APPROVED:
+        active_count = db.query(User).filter(User.role == UserRoleEnum.SUPER_ADMIN, User.status == UserStatusEnum.APPROVED).count()
+        if active_count <= 1:
+            raise HTTPException(status_code=400, detail="Không thể khóa hoặc từ chối Super Admin cuối cùng.")
 
     before_state = {"status": target.status.value, "role": target.role.value}
     target.status = req.status

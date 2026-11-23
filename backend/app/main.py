@@ -3,6 +3,9 @@ from fastapi import FastAPI, Depends, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
+from datetime import datetime
+from app.core.auth import get_current_user
+from app.models.database import Order, Product, ProductVariant, OrderStatusEnum, User
 from app.core.database import init_db, get_db
 from app.api.auth_api import router as auth_router
 from app.api.media_api import router as media_router
@@ -17,9 +20,18 @@ app = FastAPI(
 )
 
 # CORS
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:8000,http://127.0.0.1:8000"
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -48,6 +60,24 @@ def health_check():
         "app": "BIZWORK",
         "system": "Production Ready",
         "version": "1.0.0"
+    }
+
+
+@app.get("/api/dashboard/summary")
+def dashboard_summary(db=Depends(get_db), user: User = Depends(get_current_user)):
+    month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_orders = db.query(Order).filter(
+        Order.created_at >= month_start,
+        Order.status != OrderStatusEnum.CANCELLED
+    ).all()
+    pending_statuses = {OrderStatusEnum.NEW, OrderStatusEnum.CONFIRMED, OrderStatusEnum.PREPARING}
+    return {
+        "revenue_jpy": sum(order.total_amount_jpy or 0 for order in month_orders),
+        "orders_count": len(month_orders),
+        "pending_count": sum(1 for order in month_orders if order.status in pending_statuses),
+        "profit_jpy": sum(order.profit_jpy or 0 for order in month_orders),
+        "stock_count": sum(variant.stock_quantity or 0 for variant in db.query(ProductVariant).all()),
+        "products_count": db.query(Product).count()
     }
 
 @app.get("/", response_class=HTMLResponse)

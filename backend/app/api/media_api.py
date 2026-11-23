@@ -1,4 +1,5 @@
 import os
+import io
 import uuid
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
@@ -81,59 +82,78 @@ async def upload_images(
     files: List[UploadFile] = File(...),
     category: str = Form("jersey"),
     tags: str = Form(""),
+    display_name: str = Form(""),
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.ADMIN, UserRoleEnum.MANAGER, UserRoleEnum.STAFF))
 ):
+    if not files:
+        raise HTTPException(status_code=400, detail="Vui lòng chọn ít nhất một ảnh.")
+    if len(files) > 30:
+        raise HTTPException(status_code=400, detail="Mỗi lần chỉ được tải tối đa 30 ảnh.")
+
     results = []
-    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+    tag_list = [t.strip()[:100] for t in tags.split(",") if t.strip()]
+    allowed_formats = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
 
     for file in files:
-        # Validate extensions
-        ext = os.path.splitext(file.filename)[1].lower()
+        ext = os.path.splitext(file.filename or "")[1].lower()
         if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
-            continue
-
-        unique_filename = f"{uuid.uuid4().hex}{ext}"
-        saved_file_path = os.path.join(UPLOAD_DIR, unique_filename)
-        thumb_filename = f"thumb_{unique_filename}.webp"
-        saved_thumb_path = os.path.join(THUMBNAIL_DIR, thumb_filename)
+            raise HTTPException(status_code=400, detail=f"Định dạng ảnh không được hỗ trợ: {file.filename}")
 
         content = await file.read()
-        with open(saved_file_path, "wb") as f:
-            f.write(content)
-
-        # Generate lightweight WebP thumbnail (120x120) for lightning-fast spreadsheet rendering
+        if not content or len(content) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Ảnh phải có dung lượng từ 1 byte đến 10 MB.")
         try:
-            with Image.open(saved_file_path) as im:
+            with Image.open(io.BytesIO(content)) as check_image:
+                image_format = check_image.format
+                check_image.verify()
+            if image_format not in allowed_formats:
+                raise ValueError("Unsupported image format")
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Tệp {file.filename} không phải ảnh hợp lệ.")
+
+        unique_filename = f"{uuid.uuid4().hex}{allowed_formats[image_format]}"
+        saved_file_path = os.path.join(UPLOAD_DIR, unique_filename)
+        thumb_filename = f"thumb_{uuid.uuid4().hex}.webp"
+        saved_thumb_path = os.path.join(THUMBNAIL_DIR, thumb_filename)
+
+        try:
+            with Image.open(io.BytesIO(content)) as im:
                 im.thumbnail((160, 160))
                 im.save(saved_thumb_path, "WEBP", quality=80)
+            with open(saved_file_path, "wb") as output_file:
+                output_file.write(content)
+
+            media_img = MediaImage(
+                code=f"pending-{uuid.uuid4().hex}",
+                original_filename=os.path.basename(file.filename or "upload"),
+                display_name=(display_name.strip()[:255] or os.path.splitext(os.path.basename(file.filename or "Ảnh"))[0]),
+                file_path=saved_file_path,
+                thumbnail_path=saved_thumb_path,
+                file_size=len(content),
+                mime_type={"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}[image_format],
+                category=category
+            )
+            db.add(media_img)
+            db.flush()
+            media_img.code = f"@{media_img.id}"
+
+            for tag_name in tag_list:
+                tag_obj = db.query(ImageTag).filter(ImageTag.name == tag_name).first()
+                if not tag_obj:
+                    tag_obj = ImageTag(name=tag_name)
+                    db.add(tag_obj)
+                    db.flush()
+                media_img.tags.append(tag_obj)
+
+            db.commit()
+            db.refresh(media_img)
         except Exception:
-            saved_thumb_path = saved_file_path
-
-        code = generate_next_image_code(db)
-        media_img = MediaImage(
-            code=code,
-            original_filename=file.filename,
-            display_name=os.path.splitext(file.filename)[0],
-            file_path=saved_file_path,
-            thumbnail_path=saved_thumb_path,
-            file_size=len(content),
-            category=category
-        )
-        db.add(media_img)
-        db.flush()
-
-        # Handle tags
-        for t_name in tag_list:
-            tag_obj = db.query(ImageTag).filter(ImageTag.name == t_name).first()
-            if not tag_obj:
-                tag_obj = ImageTag(name=t_name)
-                db.add(tag_obj)
-                db.flush()
-            media_img.tags.append(tag_obj)
-
-        db.commit()
-        db.refresh(media_img)
+            db.rollback()
+            for path in (saved_file_path, saved_thumb_path):
+                if os.path.exists(path):
+                    os.remove(path)
+            raise
 
         results.append({
             "id": media_img.id,

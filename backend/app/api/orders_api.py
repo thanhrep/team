@@ -1,7 +1,8 @@
 from typing import List, Optional
 from datetime import datetime
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.auth import get_current_user, require_roles, log_audit
@@ -13,12 +14,12 @@ from app.models.database import (
 router = APIRouter(prefix="/orders", tags=["Japan Orders"])
 
 class OrderItemInput(BaseModel):
-    product_id: int
-    size: str
-    quantity: int = 1
+    product_id: int = Field(gt=0)
+    size: str = Field(min_length=1, max_length=20)
+    quantity: int = Field(default=1, ge=1, le=1000)
     custom_name: Optional[str] = None # In tên sau lưng: e.g. "ENDOH"
     custom_number: Optional[str] = None # In số: e.g. "6"
-    unit_price_jpy: float
+    unit_price_jpy: float = Field(ge=0)
 
 class CreateOrderRequest(BaseModel):
     # Customer / Shipping details (Japan localized)
@@ -31,9 +32,9 @@ class CreateOrderRequest(BaseModel):
     city_ward: str # e.g. "Shinjuku-ku" / "新宿区"
     address_line: str # e.g. "Shinjuku 3-1-1"
     building_room: Optional[str] = None
-    items: List[OrderItemInput]
-    shipping_fee_jpy: float = 800.0 # Standard Yamato / Sagawa delivery fee
-    discount_jpy: float = 0.0
+    items: List[OrderItemInput] = Field(min_length=1, max_length=100)
+    shipping_fee_jpy: float = Field(default=800.0, ge=0) # Standard Yamato / Sagawa delivery fee
+    discount_jpy: float = Field(default=0.0, ge=0)
     carrier: str = "Yamato Transport (ヤマト運輸)"
     internal_notes: Optional[str] = None
 
@@ -104,6 +105,9 @@ def create_order(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.ADMIN, UserRoleEnum.MANAGER, UserRoleEnum.STAFF))
 ):
+    if req.discount_jpy > sum(item.unit_price_jpy * item.quantity for item in req.items) + req.shipping_fee_jpy:
+        raise HTTPException(status_code=400, detail="Giảm giá không được lớn hơn tổng tiền đơn hàng.")
+
     # Customer registration or lookup
     cust = db.query(Customer).filter(Customer.phone == req.customer_phone).first()
     full_addr = f"{req.prefecture} {req.city_ward} {req.address_line}"
@@ -125,20 +129,14 @@ def create_order(
         db.add(cust)
         db.flush()
 
-    # Generate sequential Order code e.g. ORD-202611-0001
+    # Collision-resistant order code also remains safe for concurrent checkouts.
     today_prefix = datetime.utcnow().strftime("ORD-%Y%m-")
-    last_order = db.query(Order).filter(Order.order_code.like(f"{today_prefix}%")).order_by(Order.id.desc()).first()
-    next_num = 1
-    if last_order:
-        try:
-            next_num = int(last_order.order_code.split("-")[-1]) + 1
-        except Exception:
-            next_num = 1
-    order_code = f"{today_prefix}{next_num:04d}"
+    order_code = today_prefix + uuid.uuid4().hex[:8].upper()
 
     subtotal = 0.0
     total_cost = 0.0
     items_to_create = []
+    reserved_by_variant = {}
 
     for item_input in req.items:
         prod = db.query(Product).filter(Product.id == item_input.product_id).first()
@@ -149,7 +147,15 @@ def create_order(
         variant = db.query(ProductVariant).filter(
             ProductVariant.product_id == prod.id,
             ProductVariant.size == item_input.size
-        ).first()
+        ).with_for_update().first()
+        if not variant:
+            raise HTTPException(status_code=400, detail=f"Không tìm thấy size {item_input.size} của sản phẩm {prod.code}.")
+        reserved_by_variant[variant.id] = reserved_by_variant.get(variant.id, 0) + item_input.quantity
+        if variant.stock_quantity < reserved_by_variant[variant.id]:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Tồn kho không đủ cho {prod.code} size {item_input.size}. Còn {variant.stock_quantity}, cần {reserved_by_variant[variant.id]}."
+            )
 
         item_total = item_input.unit_price_jpy * item_input.quantity
         item_cost = prod.cost_price_jpy * item_input.quantity
@@ -197,7 +203,7 @@ def create_order(
         o_item.order_id = new_order.id
         db.add(o_item)
         if variant:
-            variant.stock_quantity = max(0, variant.stock_quantity - qty)
+            variant.stock_quantity -= qty
             txn = InventoryTransaction(
                 variant_id=variant.id,
                 type=InventoryTypeEnum.OUT,
@@ -232,6 +238,27 @@ def update_status(
         raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
 
     before_status = order.status.value
+    if order.status == OrderStatusEnum.CANCELLED and req.status != OrderStatusEnum.CANCELLED:
+        raise HTTPException(status_code=409, detail="Đơn đã hủy không thể chuyển ngược sang trạng thái khác.")
+    if req.status == OrderStatusEnum.CANCELLED and order.status != OrderStatusEnum.CANCELLED:
+        for item in order.items:
+            variant = db.query(ProductVariant).filter(
+                ProductVariant.product_id == item.product_id,
+                ProductVariant.size == item.size
+            ).with_for_update().first()
+            if variant:
+                variant.stock_quantity += item.quantity
+                db.add(InventoryTransaction(
+                    variant_id=variant.id,
+                    type=InventoryTypeEnum.IN,
+                    quantity=item.quantity,
+                    balance_after=variant.stock_quantity,
+                    reference_order_id=order.id,
+                    note=f"Hoàn kho do hủy đơn {order.order_code}"
+                ))
+        if order.customer:
+            order.customer.total_spent_jpy = max(0, order.customer.total_spent_jpy - order.total_amount_jpy)
+            order.customer.orders_count = max(0, order.customer.orders_count - 1)
     order.status = req.status
     if req.tracking_number:
         order.tracking_number = req.tracking_number

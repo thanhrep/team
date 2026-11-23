@@ -1,5 +1,5 @@
-# Temporary BIZWORK test deployment on Render.
-# During Blueprint setup, provide ADMIN_INIT_PASSWORD in the dashboard.
+# Temporary public BIZWORK test deployment on Render.
+# Authentication bypass is enabled only for this disposable test environment.
 databases:
   - name: bizwork-test-db
     databaseName: bizwork_db
@@ -29,4 +29,6 @@ services:
       - key: ADMIN_INIT_EMAIL
         value: bizwork-test@example.com
       - key: ADMIN_INIT_PASSWORD
-        sync: false
+        generateValue: true
+      - key: BIZWORK_AUTH_DISABLED
+        value: "true"

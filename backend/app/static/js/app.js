@@ -21,6 +21,7 @@ async function checkAuth() {
             document.getElementById("auth-modal").classList.add("hidden");
             setupUserUI();
             await loadMediaCatalog();
+            setInterval(() => { const panel = document.getElementById("view-media"); if (panel && !panel.classList.contains("hidden")) loadMediaCatalog(); }, 15000);
             loadWorkbooksList();
             loadOverview();
             loadProducts();

@@ -14,9 +14,9 @@ def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ) -> User:
-    # Temporary public test mode. Enable only on an isolated test deployment.
-    # Keep the real authentication flow unchanged when the flag is disabled.
-    if os.getenv("BIZWORK_AUTH_DISABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
+    # Temporary public test mode is ON by default so a fresh test deployment opens without login.
+    # Set BIZWORK_AUTH_DISABLED=false to restore normal authentication.
+    if os.getenv("BIZWORK_AUTH_DISABLED", "true").strip().lower() in {"1", "true", "yes", "on"}:
         test_admin = (
             db.query(User)
             .filter(

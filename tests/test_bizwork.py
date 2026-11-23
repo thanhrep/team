@@ -52,4 +52,4 @@ def test_source_contracts():
     assert "media_img.code = f\"@{media_img.id}\"" in media
     assert "with_for_update()" in orders
     assert "variant.stock_quantity += item.quantity" in orders
-    assert "for index in range(sheets.length)" in frontend
+    assert "for (let index = 0; index < sheets.length; index++)" in frontend

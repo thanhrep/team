@@ -5,6 +5,7 @@
 let currentUser = null;
 let currentWorkbook = null;
 let imageCatalog = {};
+let imageCatalogById = {};
 
 document.addEventListener("DOMContentLoaded", () => {
     checkAuth();
@@ -143,7 +144,9 @@ async function loadMediaCatalog() {
         if (!res.ok) return;
         const images = await res.json();
         imageCatalog = {};
+        imageCatalogById = {};
         images.forEach(img => {
+            imageCatalogById[img.id] = img;
             imageCatalog[img.code] = {
                 url: img.url,
                 thumbnail_url: img.thumbnail_url || img.url,
@@ -524,36 +527,42 @@ function escapeMediaText(value) {
 }
 
 function renderMediaGallery(images) {
-    const grid = document.getElementById("media-gallery-grid");
+    const grid = document.getElementById('media-gallery-grid');
     if (!grid) return;
     grid.innerHTML = images.map(img => {
         const name = escapeMediaText(img.display_name);
         const code = escapeMediaText(img.code);
         return '<div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm group">' +
-            '<div class="h-32 bg-slate-100 flex items-center justify-center relative overflow-hidden cursor-pointer" onclick="openFullLightbox(\\'' + img.url + '\\', \\'' + code + '\\')">' +
+            '<div class="h-32 bg-slate-100 flex items-center justify-center relative overflow-hidden cursor-pointer" onclick="openMediaById(' + img.id + ')">' +
             '<img loading="lazy" src="' + img.thumbnail_url + '" alt="' + name + '" class="h-full w-full object-cover">' +
             '<span class="absolute top-2 left-2 bg-blue-600 text-white font-black text-xs px-2 py-0.5 rounded shadow">' + code + '</span></div>' +
             '<div class="p-3"><p class="text-xs font-bold text-slate-800 truncate" title="' + name + '">' + name + '</p>' +
             '<p class="text-[10px] text-slate-400 mt-0.5">' + escapeMediaText(img.category) + ' · ' + code + '</p>' +
             '<div class="flex gap-2 mt-2"><button class="text-[11px] text-blue-700" onclick="renameMediaImage(' + img.id + ')">Đổi tên</button>' +
-            '<button class="text-[11px] text-rose-600" onclick="deleteMediaImage(' + img.id + ', \\'' + code + '\\')">Xóa</button></div></div></div>';
-    }).join("");
+            '<button class="text-[11px] text-rose-600" onclick="deleteMediaImage(' + img.id + ')">Xóa</button></div></div></div>';
+    }).join('');
+}
+
+function openMediaById(id) {
+    const img = imageCatalogById[id];
+    if (img) openFullLightbox(img.url, img.code);
 }
 
 async function renameMediaImage(id) {
-    const name = prompt("Nhập tên mới cho ảnh:");
+    const name = prompt('Nhập tên mới cho ảnh:');
     if (!name || !name.trim()) return;
-    const response = await fetch("/api/media/rename/" + id, {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({display_name:name.trim()})});
+    const response = await fetch('/api/media/rename/' + id, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:name.trim()})});
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) { alert(data.detail || "Không thể đổi tên ảnh."); return; }
+    if (!response.ok) { alert(data.detail || 'Không thể đổi tên ảnh.'); return; }
     await loadMediaCatalog();
 }
 
-async function deleteMediaImage(id, code) {
-    if (!confirm("Xóa ảnh " + code.trim() + "? Nếu ảnh đang được dùng trong sản phẩm hoặc Sheet, hệ thống sẽ chặn xóa.")) return;
-    const response = await fetch("/api/media/delete/" + id, {method:"DELETE"});
+async function deleteMediaImage(id) {
+    const img = imageCatalogById[id];
+    if (!img || !confirm('Xóa ảnh ' + img.code + '? Nếu ảnh đang được dùng trong sản phẩm hoặc Sheet, hệ thống sẽ chặn xóa.')) return;
+    const response = await fetch('/api/media/delete/' + id, {method:'DELETE'});
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) { alert(data.detail || "Không thể xóa ảnh."); return; }
+    if (!response.ok) { alert(data.detail || 'Không thể xóa ảnh.'); return; }
     await loadMediaCatalog();
 }
 // Products

@@ -36,6 +36,8 @@ def test_ai_context_reads_latest_workbook_cells():
         assert "Báo cáo bán hàng" in context
         assert "Doanh thu" in context
         assert "1250000" in context
+        assert "computed_numeric_column_summary" in context
+        assert "numeric_sum" in context
 
 
 def test_ai_context_rejects_unknown_workbook():

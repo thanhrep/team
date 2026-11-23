@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -90,11 +90,11 @@
                 <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Tên đăng nhập</label>
-                        <input id="login-username" type="text" value="admin" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 text-sm">
+                        <input id="login-username" type="text" value="" placeholder="Nhập tên đăng nhập" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 text-sm">
                     </div>
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Mật khẩu</label>
-                        <input id="login-password" type="password" value="Bizwork@2026!Pro" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 text-sm">
+                        <input id="login-password" type="password" value="" placeholder="Nhập mật khẩu" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 text-sm">
                     </div>
                     <div id="login-alert" class="hidden p-3 rounded-lg text-xs font-medium"></div>
                     <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-500/25 transition">Đăng Nhập Vào Hệ Thống</button>
@@ -427,3 +427,4 @@
     <script src="/static/js/app.js"></script>
 </body>
 </html>
+

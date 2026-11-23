@@ -624,4 +624,22 @@ async function loadUsers() {
     `).join("");
 }
 
-function loadOverview() {}
+async function loadOverview() {
+    try {
+        const response = await fetch("/api/dashboard/summary");
+        if (!response.ok) return;
+        const data = await response.json();
+        const money = value => "¥ " + Number(value || 0).toLocaleString("ja-JP");
+        const setText = (id, value) => {
+            const node = document.getElementById(id);
+            if (node) node.innerText = value;
+        };
+        setText("overview-revenue", money(data.revenue_jpy));
+        setText("overview-orders", Number(data.orders_count || 0).toLocaleString("vi-VN") + " Đơn");
+        setText("overview-pending", Number(data.pending_count || 0).toLocaleString("vi-VN") + " đơn đang xử lý");
+        setText("overview-profit", money(data.profit_jpy));
+        setText("overview-stock", Number(data.stock_count || 0).toLocaleString("vi-VN") + " Bộ");
+    } catch (error) {
+        console.error("Không thể tải tổng quan BIZWORK:", error);
+    }
+}

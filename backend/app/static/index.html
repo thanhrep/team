@@ -165,6 +165,7 @@
                         <i class="fa-solid fa-shirt w-5 text-center text-blue-400"></i>
                         <span>Sản Phẩm & Size</span>
                     </a>
+                    <a href="#ai" onclick="navTo('ai')" class="nav-item flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition"><i class="fa-solid fa-robot w-5"></i><span>BIZWORK AI</span></a>
                     <a href="#media" onclick="navTo('media')" class="nav-item flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition">
                         <i class="fa-solid fa-images w-5 text-center text-amber-400"></i>
                         <span>Thư Viện Ảnh @Mã</span>
@@ -287,6 +288,14 @@
                             <h3 class="text-lg font-bold text-slate-800">Danh Mục Áo Bóng Đá & Đội Tuyển</h3>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="products-cards-grid"></div>
+                    </section>
+
+                    <section id="view-ai" class="view-panel hidden p-4 h-full">
+                        <div class="max-w-5xl mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[calc(100vh-150px)]">
+                            <div class="p-4 border-b flex items-center justify-between"><div><h3 class="font-bold text-slate-800">BIZWORK AI</h3><p class="text-xs text-slate-500">Llama 3.2 · Phân tích dữ liệu Sheet mới nhất</p></div><span id="ai-server-status" class="text-xs text-slate-500">Đang kiểm tra AI...</span></div>
+                            <div id="ai-chat-output" class="flex-1 overflow-y-auto p-4 space-y-3"><div class="bg-blue-50 text-blue-900 rounded-xl p-3 text-sm">Hỏi về doanh thu, chi phí, đơn hàng, tồn kho hoặc yêu cầu tổng hợp báo cáo. AI chỉ đọc dữ liệu BIZWORK và không tự sửa Sheet.</div></div>
+                            <form onsubmit="sendBizworkAI(event)" class="p-3 border-t flex gap-2"><input id="ai-question" class="flex-1 border rounded-xl px-3 py-3 text-sm" placeholder="Ví dụ: Tóm tắt báo cáo kinh doanh hôm nay..." required maxlength="4000"><button class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-5 text-sm font-bold" type="submit"><i class="fa-solid fa-paper-plane"></i> Gửi</button></form>
+                        </div>
                     </section>
 
                     <!-- SECTION: MEDIA GALLERY -->

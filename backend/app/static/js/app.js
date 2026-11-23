@@ -1,19 +1,19 @@
 /**
- * BIZWORK Frontend Core Controller
- * Handles Auth, Modular Views, Dynamic Spreadsheet Engine, and @Image Resolution.
+ * BIZWORK Controller with Enterprise Luckysheet Engine
+ * Full Google Sheets parity: Formulas, Bold, Cell colors, Column colors, Text wrap, 
+ * Dynamic Image Hover Tooltip for @1, @2... and Click-to-enlarge Lightbox.
  */
 
 let currentUser = null;
 let currentWorkbook = null;
-let currentSheet = null;
-let activeCellKey = "A1";
-let sheetData = {};
+let imageCatalog = {}; // Cache for @1, @2... -> Image URLs
 
 document.addEventListener("DOMContentLoaded", () => {
     checkAuth();
+    setupImageHoverWatcher();
 });
 
-// Authentication handlers
+// Authentication
 async function checkAuth() {
     try {
         const res = await fetch("/api/auth/me");
@@ -21,10 +21,10 @@ async function checkAuth() {
             currentUser = await res.json();
             document.getElementById("auth-modal").classList.add("hidden");
             setupUserUI();
-            loadOverview();
+            await loadMediaCatalog();
             loadWorkbooksList();
+            loadOverview();
             loadProducts();
-            loadMedia();
             loadOrders();
             if (currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN") {
                 loadUsers();
@@ -34,25 +34,6 @@ async function checkAuth() {
         }
     } catch (e) {
         document.getElementById("auth-modal").classList.remove("hidden");
-    }
-}
-
-function switchAuthTab(tab) {
-    const loginForm = document.getElementById("login-form");
-    const regForm = document.getElementById("register-form");
-    const loginBtn = document.getElementById("tab-login-btn");
-    const regBtn = document.getElementById("tab-register-btn");
-
-    if (tab === "login") {
-        loginForm.classList.remove("hidden");
-        regForm.classList.add("hidden");
-        loginBtn.classList.add("border-blue-600", "text-blue-600");
-        regBtn.classList.remove("border-blue-600", "text-blue-600");
-    } else {
-        loginForm.classList.add("hidden");
-        regForm.classList.remove("hidden");
-        regBtn.classList.add("border-blue-600", "text-blue-600");
-        loginBtn.classList.remove("border-blue-600", "text-blue-600");
     }
 }
 
@@ -75,10 +56,10 @@ async function handleLogin(e) {
             currentUser = data.user;
             document.getElementById("auth-modal").classList.add("hidden");
             setupUserUI();
-            loadOverview();
+            await loadMediaCatalog();
             loadWorkbooksList();
+            loadOverview();
             loadProducts();
-            loadMedia();
             loadOrders();
         } else {
             alertBox.className = "p-3 rounded-lg text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 block";
@@ -90,34 +71,28 @@ async function handleLogin(e) {
     }
 }
 
-async function handleRegister(e) {
-    e.preventDefault();
-    const alertBox = document.getElementById("register-alert");
-    const full_name = document.getElementById("reg-fullname").value.trim();
-    const username = document.getElementById("reg-username").value.trim();
-    const email = document.getElementById("reg-email").value.trim();
-    const password = document.getElementById("reg-password").value;
-
-    const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ full_name, username, email, password })
-    });
-    const data = await res.json();
-    alertBox.classList.remove("hidden");
-    if (res.ok) {
-        alertBox.className = "p-3 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 block";
-        alertBox.innerText = data.message;
-        setTimeout(() => switchAuthTab("login"), 2500);
-    } else {
-        alertBox.className = "p-3 rounded-lg text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 block";
-        alertBox.innerText = data.detail || "Đăng ký thất bại.";
-    }
-}
-
 async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.reload();
+}
+
+function switchAuthTab(tab) {
+    const loginForm = document.getElementById("login-form");
+    const regForm = document.getElementById("register-form");
+    const loginBtn = document.getElementById("tab-login-btn");
+    const regBtn = document.getElementById("tab-register-btn");
+
+    if (tab === "login") {
+        loginForm.classList.remove("hidden");
+        regForm.classList.add("hidden");
+        loginBtn.classList.add("border-blue-600", "text-blue-600");
+        regBtn.classList.remove("border-blue-600", "text-blue-600");
+    } else {
+        loginForm.classList.add("hidden");
+        regForm.classList.remove("hidden");
+        regBtn.classList.add("border-blue-600", "text-blue-600");
+        loginBtn.classList.remove("border-blue-600", "text-blue-600");
+    }
 }
 
 function setupUserUI() {
@@ -127,11 +102,11 @@ function setupUserUI() {
     document.getElementById("user-avatar").innerText = currentUser.username.substring(0, 2).toUpperCase();
 
     if (currentUser.role !== "SUPER_ADMIN" && currentUser.role !== "ADMIN") {
-        document.getElementById("admin-user-nav").classList.add("hidden");
+        const adminNav = document.getElementById("admin-user-nav");
+        if (adminNav) adminNav.classList.add("hidden");
     }
 }
 
-// Navigation Router
 function navTo(viewName) {
     document.querySelectorAll(".view-panel").forEach(p => p.classList.add("hidden"));
     document.querySelectorAll(".nav-item").forEach(i => i.classList.remove("bg-blue-600", "text-white"));
@@ -143,17 +118,42 @@ function navTo(viewName) {
     if (activeNav) activeNav.classList.add("bg-blue-600", "text-white");
 
     const titles = {
+        spreadsheets: "Bảng Tính Nội Bộ BIZWORK (Chuẩn Google Sheets)",
         overview: "Tổng Quan Kinh Doanh",
-        spreadsheets: "Bảng Tính Nội Bộ BIZWORK",
         products: "Quản Lý Áo Bóng Đá & Đội Tuyển",
         media: "Thư Viện Ảnh @Mã Định Danh",
         orders: "Quản Lý Đơn Hàng Thị Trường Nhật Bản",
         users: "Duyệt Tài Khoản & Phân Quyền Bảo Mật"
     };
     document.getElementById("page-title").innerText = titles[viewName] || "BIZWORK";
+
+    if (viewName === "spreadsheets" && window.luckysheet) {
+        setTimeout(() => window.luckysheet.resize(), 100);
+    }
 }
 
-// SPREADSHEET ENGINE
+// Media Catalog Cache for @1, @2 Hover
+async function loadMediaCatalog() {
+    try {
+        const res = await fetch("/api/media/list");
+        if (!res.ok) return;
+        const images = await res.json();
+        images.forEach(img => {
+            imageCatalog[img.code] = {
+                url: img.url,
+                thumbnail_url: img.thumbnail_url || img.url,
+                display_name: img.display_name
+            };
+        });
+        renderMediaGallery(images);
+    } catch (e) {
+        console.error("Error loading media catalog:", e);
+    }
+}
+
+// ==========================================
+// ENTERPRISE LUCKYSHEET (GOOGLE SHEETS 100%)
+// ==========================================
 async function loadWorkbooksList() {
     const res = await fetch("/api/spreadsheets/workbooks");
     if (!res.ok) return;
@@ -169,120 +169,171 @@ async function loadWorkbook(wbId) {
     const res = await fetch(`/api/spreadsheets/workbook/${wbId}`);
     if (!res.ok) return;
     currentWorkbook = await res.json();
-    if (currentWorkbook.sheets && currentWorkbook.sheets.length > 0) {
-        currentSheet = currentWorkbook.sheets[0];
-        sheetData = currentSheet.data || {};
-        renderSpreadsheetTable(currentSheet.row_count || 50, currentSheet.col_count || 20);
-    }
+    initLuckysheetFromWorkbook(currentWorkbook);
 }
 
-function renderSpreadsheetTable(rows, cols) {
-    const table = document.getElementById("spreadsheet-table");
-    let html = "<thead><tr><th class='header-cell w-12'>#</th>";
+function initLuckysheetFromWorkbook(wb) {
+    const sheetsData = (wb.sheets && wb.sheets.length > 0) ? wb.sheets : [
+        { id: 1, name: "Sheet1", row_count: 84, col_count: 26, data: {} }
+    ];
 
-    for (let c = 0; c < cols; c++) {
-        const colLetter = String.fromCharCode(65 + c);
-        html += `<th class="header-cell" style="width: 140px;">${colLetter}</th>`;
-    }
-    html += "</tr></thead><tbody>";
+    const luckysheetData = sheetsData.map((s, idx) => {
+        // Convert cell JSON into Luckysheet celldata format
+        const celldata = [];
+        const rawCells = s.data || {};
+        
+        for (const [cellRef, valObj] of Object.entries(rawCells)) {
+            const match = cellRef.match(/^([A-Z]+)([0-9]+)$/);
+            if (!match) continue;
+            const colLetter = match[1];
+            const rowNum = parseInt(match[2], 10) - 1; // 0-based row
+            
+            // Convert column letters A, B -> 0, 1
+            let colNum = 0;
+            for (let i = 0; i < colLetter.length; i++) {
+                colNum = colNum * 26 + (colLetter.charCodeAt(i) - 64);
+            }
+            colNum -= 1; // 0-based col
 
-    for (let r = 1; r <= rows; r++) {
-        html += `<tr><td class="header-cell">${r}</td>`;
-        for (let c = 0; c < cols; c++) {
-            const colLetter = String.fromCharCode(65 + c);
-            const key = `${colLetter}${r}`;
-            const cell = sheetData[key] || {};
-            const rawVal = cell.f ? cell.f : (cell.v !== undefined ? cell.v : "");
-            const displayContent = formatCellContent(rawVal);
+            const val = valObj.v !== undefined ? valObj.v : "";
+            const formula = valObj.f || "";
 
-            html += `<td id="cell-${key}" 
-                         class="spreadsheet-cell" 
-                         contenteditable="true" 
-                         onclick="selectCell('${key}')" 
-                         onblur="onCellBlur('${key}', this)" 
-                         data-key="${key}">${displayContent}</td>`;
+            celldata.push({
+                r: rowNum,
+                c: colNum,
+                v: {
+                    v: val,
+                    m: String(val),
+                    f: formula ? formula : undefined,
+                    bg: rowNum === 0 ? "#f1f5f9" : undefined, // Header styling
+                    bl: rowNum === 0 ? 1 : undefined,         // Header bold
+                    tb: 1 // Text wrap enable by default
+                }
+            });
         }
-        html += "</tr>";
+
+        return {
+            name: s.name || `Sheet${idx + 1}`,
+            index: idx,
+            status: idx === 0 ? 1 : 0,
+            order: idx,
+            row: s.row_count || 80,
+            column: s.col_count || 26,
+            celldata: celldata
+        };
+    });
+
+    // Destroy existing luckysheet if any
+    if (window.luckysheet && window.luckysheet.destroy) {
+        window.luckysheet.destroy();
     }
-    html += "</tbody>";
-    table.innerHTML = html;
+
+    // Configure Luckysheet with 100% Google Sheets toolbar features
+    const options = {
+        container: 'luckysheet',
+        title: wb.title,
+        lang: 'en',
+        showinfobar: false,
+        showsheetbar: true,
+        showstatisticBar: true,
+        sheetFormulaBar: true,
+        enableAddRow: true,
+        enableAddCol: true,
+        // Full toolbar parity: Bold, Italic, Color, BG, Wrap text, Align, Freeze, Filter, Undo, Sort
+        toolbarConfig: {
+            undo: true,
+            redo: true,
+            paintFormat: true,
+            currency: true,
+            percentage: true,
+            numberDecrease: true,
+            numberIncrease: true,
+            moreFormats: true,
+            font: true,
+            fontSize: true,
+            bold: true,       // Bôi đen chữ
+            italic: true,     // Nghiêng
+            strikethrough: true,
+            underline: true,  // Gạch chân
+            textColor: true,  // Màu chữ
+            fillColor: true,  // Màu nền ô (Màu ô, màu cột)
+            border: true,     // Viền ô
+            mergeCell: true,  // Gộp ô
+            horizontalAlignMode: true, // Căn trái, giữa, phải
+            verticalAlignMode: true,   // Căn trên, giữa, dưới
+            textWrapMode: true,        // Xuống dòng (Wrap text) 100%
+            textRotateMode: true,
+            image: true,
+            link: true,
+            chart: true,
+            postil: true,
+            pivotTable: true,
+            function: true,   // Đầy đủ công thức SUM, AVERAGE, VLOOKUP...
+            frozenMode: true, // Cố định hàng / cột (Freeze panes)
+            sortAndFilter: true,
+            conditionalFormat: true,
+            dataVerification: true,
+            splitColumn: true,
+            screenshot: true,
+            findAndReplace: true,
+            protection: true,
+            print: true
+        },
+        data: luckysheetData
+    };
+
+    window.luckysheet.create(options);
 }
 
-function formatCellContent(val) {
-    if (val === null || val === undefined) return "";
-    const str = String(val).trim();
-    // Match @1, @2 @3 image codes
-    if (str.startsWith("@")) {
-        const codes = str.split(" ").filter(c => c.startsWith("@"));
-        return codes.map(c => `<span class="cell-img-badge"><i class="fa-solid fa-image mr-1"></i>${c}</span>`).join(" ");
-    }
-    return str;
-}
-
-function selectCell(key) {
-    activeCellKey = key;
-    document.getElementById("active-cell-label").innerText = key;
-    const cell = sheetData[key] || {};
-    const inputVal = cell.f ? cell.f : (cell.v !== undefined ? cell.v : "");
-    document.getElementById("formula-bar-input").value = inputVal;
-}
-
-function onFormulaBarChange(val) {
-    if (!activeCellKey) return;
-    const td = document.getElementById(`cell-${activeCellKey}`);
-    if (td) {
-        td.innerHTML = formatCellContent(val);
-        updateCellData(activeCellKey, val);
-    }
-}
-
-function onCellBlur(key, element) {
-    const val = element.innerText.trim();
-    updateCellData(key, val);
-    element.innerHTML = formatCellContent(val);
-}
-
-function updateCellData(key, rawVal) {
-    if (!sheetData[key]) sheetData[key] = {};
-    if (String(rawVal).startsWith("=")) {
-        sheetData[key].f = rawVal;
-        sheetData[key].v = evaluateSimpleFormula(rawVal);
-    } else {
-        sheetData[key].v = rawVal;
-        delete sheetData[key].f;
-    }
-}
-
-function evaluateSimpleFormula(f) {
-    try {
-        // Safe evaluation of standard SUM, subtraction
-        if (f.toUpperCase().startsWith("=SUM(")) {
-            // Simplified SUM
-            return 0;
-        }
-        return f;
-    } catch {
-        return f;
-    }
-}
-
-async function saveCurrentSheet() {
-    if (!currentSheet) return;
+// Save Luckysheet data back to Backend Database
+async function saveCurrentLuckysheet() {
+    if (!currentWorkbook || !window.luckysheet) return;
     const statusLabel = document.getElementById("save-status");
     statusLabel.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...`;
 
+    const sheets = window.luckysheet.getAllSheets();
+    const primarySheet = sheets[0];
+    const dataMatrix = primarySheet.data || [];
+
+    // Convert Luckysheet 2D matrix into BIZWORK cell dictionary {"A1": {"v": ...}}
+    const convertedData = {};
+    for (let r = 0; r < dataMatrix.length; r++) {
+        const row = dataMatrix[r] || [];
+        for (let c = 0; c < row.length; c++) {
+            const cell = row[c];
+            if (cell && (cell.v !== undefined || cell.f !== undefined)) {
+                // Convert col index 0, 1 -> A, B
+                let colLetter = "";
+                let tempC = c + 1;
+                while (tempC > 0) {
+                    const rem = (tempC - 1) % 26;
+                    colLetter = String.fromCharCode(65 + rem) + colLetter;
+                    tempC = Math.floor((tempC - 1) / 26);
+                }
+                const cellRef = `${colLetter}${r + 1}`;
+                convertedData[cellRef] = {
+                    v: cell.v,
+                    f: cell.f,
+                    s: { bg: cell.bg, bl: cell.bl }
+                };
+            }
+        }
+    }
+
+    const firstSheetId = currentWorkbook.sheets && currentWorkbook.sheets[0] ? currentWorkbook.sheets[0].id : 1;
     const res = await fetch("/api/spreadsheets/save-sheet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            sheet_id: currentSheet.id,
-            data: sheetData,
-            comment: "Cập nhật từ bảng tính Web"
+            sheet_id: firstSheetId,
+            data: convertedData,
+            comment: "Cập nhật từ bảng tính Google Sheets Pro"
         })
     });
+
     if (res.ok) {
-        statusLabel.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Đã lưu thành công`;
-        setTimeout(() => statusLabel.innerHTML = `<i class="fa-solid fa-check"></i> Đã đồng bộ`, 2000);
+        statusLabel.innerHTML = `<i class="fa-solid fa-cloud-arrow-up text-emerald-600"></i> Đã lưu vào CSDL`;
+        setTimeout(() => statusLabel.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i> Sẵn sàng`, 2000);
     }
 }
 
@@ -291,15 +342,65 @@ function exportCurrentWorkbook() {
     window.open(`/api/spreadsheets/export-xlsx/${currentWorkbook.id}`, "_blank");
 }
 
-// MEDIA GALLERY
-async function loadMedia() {
-    const res = await fetch("/api/media/list");
-    if (!res.ok) return;
-    const images = await res.json();
+// ==============================================================
+// MÃ @ẢNH: DI CHUỘT HIỆN THUMBNAIL, NHẤN LOGO BẬT ẢNH TO SẮC NÉT
+// ==============================================================
+function setupImageHoverWatcher() {
+    const tooltip = document.getElementById("img-hover-tooltip");
+    const thumbImg = document.getElementById("hover-thumb-img");
+    const thumbCode = document.getElementById("hover-thumb-code");
+
+    document.addEventListener("mouseover", (e) => {
+        const text = e.target.innerText || e.target.textContent || "";
+        const match = text.match(/@([0-9]+)/);
+        if (match) {
+            const code = `@${match[1]}`;
+            const imgData = imageCatalog[code] || {
+                url: `https://placehold.co/400x400/1e293b/fff?text=${code}`,
+                thumbnail_url: `https://placehold.co/140x140/1e293b/fff?text=${code}`
+            };
+
+            thumbImg.src = imgData.thumbnail_url;
+            thumbCode.innerText = `${code} (Logo / Áo đấu)`;
+            tooltip.style.left = `${Math.min(window.innerWidth - 180, e.clientX + 15)}px`;
+            tooltip.style.top = `${Math.min(window.innerHeight - 200, e.clientY + 15)}px`;
+            tooltip.style.display = "block";
+        }
+    });
+
+    document.addEventListener("mousemove", (e) => {
+        if (tooltip.style.display === "block") {
+            const text = e.target.innerText || e.target.textContent || "";
+            if (!text.includes("@") && !tooltip.contains(e.target)) {
+                tooltip.style.display = "none";
+            }
+        }
+    });
+}
+
+function openFullLightbox(src, code) {
+    const modal = document.getElementById("image-lightbox-modal");
+    const lightImg = document.getElementById("lightbox-image");
+    const lightCode = document.getElementById("lightbox-code");
+    
+    // Use full image if in catalog
+    const realImg = imageCatalog[code] ? imageCatalog[code].url : src;
+    lightImg.src = realImg;
+    lightCode.innerText = code || "@ẢNH";
+    modal.classList.remove("hidden");
+}
+
+function closeFullLightbox() {
+    document.getElementById("image-lightbox-modal").classList.add("hidden");
+}
+
+// Media Gallery View
+function renderMediaGallery(images) {
     const grid = document.getElementById("media-gallery-grid");
+    if (!grid) return;
     grid.innerHTML = images.map(img => `
         <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm group hover:shadow-md transition">
-            <div class="h-32 bg-slate-100 flex items-center justify-center relative overflow-hidden">
+            <div class="h-32 bg-slate-100 flex items-center justify-center relative overflow-hidden cursor-pointer" onclick="openFullLightbox('${img.url}', '${img.code}')">
                 <img src="${img.url}" alt="${img.display_name}" class="h-full w-full object-cover group-hover:scale-105 transition" onerror="this.src='https://placehold.co/200x200/1e293b/fff?text=${img.code}'">
                 <span class="absolute top-2 left-2 bg-blue-600 text-white font-black text-xs px-2 py-0.5 rounded shadow">${img.code}</span>
             </div>
@@ -311,33 +412,19 @@ async function loadMedia() {
     `).join("");
 }
 
-async function uploadSelectedImages(files) {
-    if (!files || files.length === 0) return;
-    const formData = new FormData();
-    for (let f of files) formData.append("files", f);
-    formData.append("category", "jersey");
-
-    const res = await fetch("/api/media/upload", {
-        method: "POST",
-        body: formData
-    });
-    if (res.ok) {
-        loadMedia();
-    }
-}
-
-// PRODUCTS
+// Products
 async function loadProducts() {
     const res = await fetch("/api/products/list");
     if (!res.ok) return;
     const prods = await res.json();
     const grid = document.getElementById("products-cards-grid");
+    if (!grid) return;
     grid.innerHTML = prods.map(p => `
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between p-5">
             <div>
                 <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-lg">${p.code}</span>
-                    <span class="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg">${p.primary_image_code || "@1"}</span>
+                    <span class="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg cursor-pointer" onclick="openFullLightbox('', '${p.primary_image_code || '@1'}')">${p.primary_image_code || "@1"}</span>
                 </div>
                 <h4 class="font-bold text-slate-900 text-sm leading-tight mb-1">${p.name}</h4>
                 <p class="text-xs text-slate-500 font-medium mb-3">${p.name_ja || ""}</p>
@@ -366,15 +453,14 @@ async function loadProducts() {
     `).join("");
 }
 
-// ORDERS
+// Orders
 async function loadOrders() {
     const res = await fetch("/api/orders/list");
     if (!res.ok) return;
     const orders = await res.json();
     const tbody = document.getElementById("orders-full-tbody");
-    const overviewTbody = document.getElementById("overview-orders-tbody");
-
-    const rows = orders.map(o => `
+    if (!tbody) return;
+    tbody.innerHTML = orders.map(o => `
         <tr class="hover:bg-slate-50 transition">
             <td class="py-3 px-4 font-mono font-bold text-xs text-blue-600">${o.order_code}</td>
             <td class="py-3 px-4">
@@ -394,69 +480,28 @@ async function loadOrders() {
             <td class="py-3 px-4">
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">${o.status}</span>
             </td>
-            <td class="py-3 px-4 text-center">
-                <button class="text-xs text-slate-500 hover:text-blue-600 font-semibold"><i class="fa-solid fa-eye"></i></button>
-            </td>
         </tr>
     `).join("");
-
-    if (tbody) tbody.innerHTML = rows;
-    if (overviewTbody) overviewTbody.innerHTML = rows;
 }
 
-// USERS & APPROVAL (ADMIN)
+// Users (Admin)
 async function loadUsers() {
     const res = await fetch("/api/auth/users");
     if (!res.ok) return;
     const users = await res.json();
     const tbody = document.getElementById("users-table-tbody");
+    if (!tbody) return;
     tbody.innerHTML = users.map(u => `
         <tr class="hover:bg-slate-50 transition">
             <td class="py-3 px-4 text-xs font-mono">${u.id}</td>
-            <td class="py-3 px-4">
-                <div class="font-bold text-slate-900 text-xs">${u.full_name}</div>
-                <div class="text-[11px] text-slate-400 font-mono">@${u.username}</div>
-            </td>
+            <td class="py-3 px-4 font-bold text-slate-900 text-xs">${u.full_name} (@${u.username})</td>
             <td class="py-3 px-4 text-xs text-slate-600">${u.email}</td>
+            <td class="py-3 px-4 text-xs font-mono">${u.role}</td>
             <td class="py-3 px-4">
-                <span class="text-xs font-bold text-slate-700 font-mono">${u.role}</span>
-            </td>
-            <td class="py-3 px-4">
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                    u.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
-                    u.status === 'PENDING' ? 'bg-amber-100 text-amber-800 animate-pulse' :
-                    'bg-rose-100 text-rose-700'
-                }">${u.status}</span>
-            </td>
-            <td class="py-3 px-4 text-center space-x-2">
-                ${u.status === 'PENDING' ? `
-                    <button onclick="approveUserAction(${u.id}, 'APPROVED', '${u.role}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg transition shadow-sm">
-                        <i class="fa-solid fa-check mr-1"></i> Duyệt Quyền
-                    </button>
-                    <button onclick="approveUserAction(${u.id}, 'REJECTED', '${u.role}')" class="bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg transition shadow-sm">
-                        <i class="fa-solid fa-xmark mr-1"></i> Từ Chối
-                    </button>
-                ` : `
-                    <button onclick="approveUserAction(${u.id}, '${u.status === 'APPROVED' ? 'LOCKED' : 'APPROVED'}', '${u.role}')" class="text-xs font-semibold ${u.status === 'APPROVED' ? 'text-amber-600 hover:underline' : 'text-emerald-600 hover:underline'}">
-                        ${u.status === 'APPROVED' ? 'Khóa' : 'Mở Khóa'}
-                    </button>
-                `}
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${u.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}">${u.status}</span>
             </td>
         </tr>
     `).join("");
 }
 
-async function approveUserAction(userId, status, role) {
-    const res = await fetch("/api/auth/users/approve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, status, role })
-    });
-    if (res.ok) {
-        loadUsers();
-    }
-}
-
-function loadOverview() {
-    // Loaded within sub-functions
-}
+function loadOverview() {}

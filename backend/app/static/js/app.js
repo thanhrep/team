@@ -530,13 +530,13 @@ function renderMediaGallery(images) {
         const name = escapeMediaText(img.display_name);
         const code = escapeMediaText(img.code);
         return '<div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm group">' +
-            '<div class="h-32 bg-slate-100 flex items-center justify-center relative overflow-hidden cursor-pointer" onclick="openFullLightbox(\'' + img.url + '\', \' ' + code + '\')">' +
+            '<div class="h-32 bg-slate-100 flex items-center justify-center relative overflow-hidden cursor-pointer" onclick="openFullLightbox(\\'' + img.url + '\\', \\'' + code + '\\')">' +
             '<img loading="lazy" src="' + img.thumbnail_url + '" alt="' + name + '" class="h-full w-full object-cover">' +
             '<span class="absolute top-2 left-2 bg-blue-600 text-white font-black text-xs px-2 py-0.5 rounded shadow">' + code + '</span></div>' +
             '<div class="p-3"><p class="text-xs font-bold text-slate-800 truncate" title="' + name + '">' + name + '</p>' +
             '<p class="text-[10px] text-slate-400 mt-0.5">' + escapeMediaText(img.category) + ' · ' + code + '</p>' +
             '<div class="flex gap-2 mt-2"><button class="text-[11px] text-blue-700" onclick="renameMediaImage(' + img.id + ')">Đổi tên</button>' +
-            '<button class="text-[11px] text-rose-600" onclick="deleteMediaImage(' + img.id + ', \' ' + code + '\')">Xóa</button></div></div></div>';
+            '<button class="text-[11px] text-rose-600" onclick="deleteMediaImage(' + img.id + ', \\'' + code + '\\')">Xóa</button></div></div></div>';
     }).join("");
 }
 

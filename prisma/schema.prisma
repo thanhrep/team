@@ -321,3 +321,11 @@ model Notification {
  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
  @@index([userId,readAt,createdAt])
 }
+
+model LoginAttempt {
+ id Int @id @default(autoincrement())
+ identifier String
+ success Boolean @default(false)
+ attemptedAt DateTime @default(now())
+ @@index([identifier,attemptedAt,success])
+}

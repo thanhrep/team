@@ -1,5 +1,5 @@
 import {describe,it,expect} from "vitest";
-import {registerSchema,productSchema} from "@/lib/validation";
+import {registerSchema,productSchema} from "./validation";
 describe("BIZWORK validation",()=>{
  it("requires long passwords before registration",()=>{expect(registerSchema.safeParse({name:"An",email:"an@example.com",password:"short"}).success).toBe(false);});
  it("accepts a pending employee registration payload",()=>{expect(registerSchema.safeParse({name:"An Nguyen",email:"an@example.com",password:"correct-horse-battery"}).success).toBe(true);});

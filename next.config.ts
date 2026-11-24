@@ -1,1 +1,3 @@
-import type { NextConfig } from "next"; const config:NextConfig={serverExternalPackages:["sharp"]}; export default config;
+import type { NextConfig } from "next";
+const config: NextConfig = { output: "standalone", serverExternalPackages: ["sharp"] };
+export default config;

@@ -1,64 +1,39 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:16-alpine
-    container_name: bizwork-postgres
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-bizwork_user}
+      POSTGRES_DB: bizwork
+      POSTGRES_USER: bizwork
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-bizwork_db}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - bizwork-network
-    # IMPORTANT: Do not expose port 5432 to Internet for security
-    expose:
-      - "5432"
-
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U bizwork -d bizwork"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [private]
   app:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: bizwork-app
-    restart: always
-    depends_on:
-      - db
+    build: .
+    restart: unless-stopped
+    env_file: .env
     environment:
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-bizwork_user}:${POSTGRES_PASSWORD:-BizworkSecurePass2026!}@db:5432/${POSTGRES_DB:-bizwork_db}
-      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://team.linkpc.net}
-    volumes:
-      - ./backend/app/static/uploads:/app/app/static/uploads
-    networks:
-      - bizwork-network
-    expose:
-      - "8000"
-
-  caddy:
-    image: caddy:2-alpine
-    container_name: bizwork-caddy
-    restart: always
+      DATABASE_URL: postgresql://bizwork:${POSTGRES_PASSWORD}@db:5432/bizwork?schema=public
+      MEDIA_ROOT: /data/media
+    ports: ["127.0.0.1:3000:3000"]
+    volumes: [media_data:/data/media]
     depends_on:
-      - app
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DOMAIN: ${DOMAIN:-team.linkpc.net}
-    volumes:
-      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - bizwork-network
-
+      db: {condition: service_healthy}
+    networks: [private]
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ai"]
+    restart: unless-stopped
+    volumes: [ollama_data:/root/.ollama]
+    networks: [private]
 volumes:
   postgres_data:
-  caddy_data:
-  caddy_config:
-
+  media_data:
+  ollama_data:
 networks:
-  bizwork-network:
-    driver: bridge
+  private:

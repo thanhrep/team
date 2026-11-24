@@ -1,0 +1,2 @@
+import {redirect} from "next/navigation";import {currentUser} from "@/lib/auth";import MediaLibrary from "@/components/MediaLibrary";
+export default async function Media(){if(!await currentUser())redirect("/login");return <main className="p-6 md:p-10"><a href="/dashboard" className="text-sm text-blue-800">← Tổng quan</a><h1 className="text-3xl font-bold mt-3">Thư viện ảnh sản phẩm</h1><p className="text-gray-500 mt-1">Ảnh được lưu tập trung trên server; mã @số ảnh không đổi khi đổi tên.</p><MediaLibrary/></main>}

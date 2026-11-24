@@ -1,0 +1,371 @@
+generator client {
+ provider = "prisma-client-js"
+}
+datasource db {
+ provider = "postgresql"
+ url = env("DATABASE_URL")
+}
+enum UserStatus {
+ PENDING
+ APPROVED
+ REJECTED
+ LOCKED
+}
+enum Role {
+ SUPER_ADMIN
+ ADMIN
+ MANAGER
+ STAFF
+ VIEWER
+}
+enum ProductStatus {
+ DRAFT
+ ACTIVE
+ OUT_OF_STOCK
+ DISCONTINUED
+}
+enum OrderStatus {
+ NEW
+ CONFIRMED
+ PREPARING
+ SHIPPED
+ DELIVERED
+ RETURNED
+ CANCELLED
+}
+enum InventoryType {
+ INBOUND
+ OUTBOUND
+ ADJUSTMENT
+}
+enum PurchaseOrderStatus {
+ DRAFT
+ SENT
+ PARTIAL
+ RECEIVED
+ CANCELLED
+}
+model User {
+ id String @id @default(cuid())
+ name String
+ email String @unique
+ passwordHash String
+ status UserStatus @default(PENDING)
+ role Role @default(STAFF)
+ locale String @default("vi")
+ approvedAt DateTime?
+ approvedById String?
+ lastLoginAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ sessions Session[]
+ auditLogs AuditLog[]
+ workbookPermissions WorkbookPermission[]
+ notifications Notification[]
+ approvedBy User? @relation("Approvals",fields:[approvedById],references:[id])
+ approvals User[] @relation("Approvals")
+ @@index([status,createdAt])
+}
+model Session {
+ id String @id @default(cuid())
+ tokenHash String @unique
+ userId String
+ expiresAt DateTime
+ createdAt DateTime @default(now())
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ @@index([userId,expiresAt])
+}
+model AuditLog {
+ id String @id @default(cuid())
+ actorId String?
+ action String
+ entityType String
+ entityId String?
+ beforeData Json?
+ afterData Json?
+ ipAddress String?
+ createdAt DateTime @default(now())
+ actor User? @relation(fields:[actorId],references:[id],onDelete:SetNull)
+ @@index([entityType,entityId,createdAt])
+}
+model Workbook {
+ id String @id @default(cuid())
+ name String
+ description String?
+ ownerId String
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ sheets WorkbookSheet[]
+ versions WorkbookVersion[]
+ permissions WorkbookPermission[]
+}
+model WorkbookSheet {
+ id String @id @default(cuid())
+ workbookId String
+ name String
+ position Int @default(0)
+ data Json
+ updatedAt DateTime @updatedAt
+ workbook Workbook @relation(fields:[workbookId],references:[id],onDelete:Cascade)
+ @@unique([workbookId,name])
+ @@index([workbookId,position])
+}
+model WorkbookVersion {
+ id String @id @default(cuid())
+ workbookId String
+ version Int
+ snapshot Json
+ createdBy String
+ createdAt DateTime @default(now())
+ workbook Workbook @relation(fields:[workbookId],references:[id],onDelete:Cascade)
+ @@unique([workbookId,version])
+}
+model MediaImage {
+ id Int @id @default(autoincrement())
+ code String @unique
+ originalName String
+ displayName String
+ mimeType String
+ sizeBytes Int
+ storagePath String
+ thumbnailPath String?
+ description String?
+ category String?
+ tags String[] @default([])
+ uploadedBy String
+ createdAt DateTime @default(now())
+ productLinks ProductImage[]
+ @@index([displayName])
+}
+model Product {
+ id String @id @default(cuid())
+ sku String @unique
+ name String
+ nameJa String?
+ nameEn String?
+ category String
+ team String?
+ season String?
+ color String?
+ material String?
+ description String?
+ costPriceJpy Decimal @default(0) @db.Decimal(14,2)
+ salePriceJpy Decimal @default(0) @db.Decimal(14,2)
+ salePriceVnd Decimal @default(0) @db.Decimal(16,2)
+ status ProductStatus @default(DRAFT)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ images ProductImage[]
+ variants ProductVariant[]
+ orderItems OrderItem[]
+ purchaseOrderItems PurchaseOrderItem[]
+ supplierLinks SupplierProduct[]
+ @@index([status,category])
+}
+model ProductImage {
+ productId String
+ imageId Int
+ isPrimary Boolean @default(false)
+ position Int @default(0)
+ product Product @relation(fields:[productId],references:[id],onDelete:Cascade)
+ image MediaImage @relation(fields:[imageId],references:[id],onDelete:Restrict)
+ @@id([productId,imageId])
+}
+model ProductVariant {
+ id String @id @default(cuid())
+ productId String
+ size String
+ color String?
+ stock Int @default(0)
+ sku String @unique
+ product Product @relation(fields:[productId],references:[id],onDelete:Cascade)
+ inventoryBalance InventoryBalance?
+ inventoryTransactions InventoryTransaction[]
+ purchaseOrderItems PurchaseOrderItem[]
+ @@unique([productId,size,color])
+}
+model Customer {
+ id String @id @default(cuid())
+ name String
+ nameReading String?
+ email String?
+ phone String?
+ country String @default("JP")
+ postalCode String?
+ prefecture String?
+ city String?
+ address1 String?
+ address2 String?
+ notes String?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ orders Order[]
+ @@index([name,email])
+}
+model Order {
+ id String @id @default(cuid())
+ orderNo String @unique
+ customerId String
+ status OrderStatus @default(NEW)
+ currency String @default("JPY")
+ subtotalJpy Decimal @default(0) @db.Decimal(14,2)
+ shippingJpy Decimal @default(0) @db.Decimal(14,2)
+ discountJpy Decimal @default(0) @db.Decimal(14,2)
+ totalJpy Decimal @default(0) @db.Decimal(14,2)
+ trackingNumber String?
+ carrier String?
+ internalNotes String?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ customer Customer @relation(fields:[customerId],references:[id])
+ items OrderItem[]
+ @@index([status,createdAt])
+}
+model OrderItem {
+ id String @id @default(cuid())
+ orderId String
+ productId String
+ productName String
+ size String
+ quantity Int
+ unitPriceJpy Decimal @db.Decimal(14,2)
+ order Order @relation(fields:[orderId],references:[id],onDelete:Cascade)
+ product Product @relation(fields:[productId],references:[id])
+}
+model Supplier {
+ id String @id @default(cuid())
+ name String
+ contactName String?
+ email String?
+ phone String?
+ terms String?
+ notes String?
+ createdAt DateTime @default(now())
+ products SupplierProduct[]
+ purchaseOrders PurchaseOrder[]
+}
+model Expense {
+ id String @id @default(cuid())
+ title String
+ amountJpy Decimal @db.Decimal(14,2)
+ category String
+ occurredAt DateTime
+ note String?
+ createdAt DateTime @default(now())
+ @@index([occurredAt,category])
+}
+model ExchangeRate {
+ id String @id @default(cuid())
+ base String
+ quote String
+ rate Decimal @db.Decimal(18,6)
+ source String?
+ observedAt DateTime
+ createdBy String
+ @@index([base,quote,observedAt])
+}
+model SystemSetting {
+ key String @id
+ value Json
+ updatedAt DateTime @updatedAt
+}
+
+model Permission {
+ id String @id @default(cuid())
+ module String
+ action String
+ description String?
+ roles RolePermission[]
+ @@unique([module,action])
+}
+model RolePermission {
+ role Role
+ permissionId String
+ permission Permission @relation(fields:[permissionId],references:[id],onDelete:Cascade)
+ @@id([role,permissionId])
+}
+model WorkbookPermission {
+ id String @id @default(cuid())
+ workbookId String
+ userId String
+ canView Boolean @default(true)
+ canEdit Boolean @default(false)
+ canExport Boolean @default(false)
+ createdAt DateTime @default(now())
+ workbook Workbook @relation(fields:[workbookId],references:[id],onDelete:Cascade)
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ @@unique([workbookId,userId])
+}
+model InventoryBalance {
+ id String @id @default(cuid())
+ variantId String @unique
+ quantity Int @default(0)
+ updatedAt DateTime @updatedAt
+ variant ProductVariant @relation(fields:[variantId],references:[id],onDelete:Cascade)
+}
+model InventoryTransaction {
+ id String @id @default(cuid())
+ variantId String
+ type InventoryType
+ quantity Int
+ reason String?
+ referenceId String?
+ createdBy String
+ createdAt DateTime @default(now())
+ variant ProductVariant @relation(fields:[variantId],references:[id])
+ @@index([variantId,createdAt])
+}
+model SupplierProduct {
+ id String @id @default(cuid())
+ supplierId String
+ productId String
+ supplierSku String?
+ costPriceJpy Decimal @db.Decimal(14,2)
+ leadTimeDays Int?
+ supplier Supplier @relation(fields:[supplierId],references:[id],onDelete:Cascade)
+ product Product @relation(fields:[productId],references:[id],onDelete:Cascade)
+ @@unique([supplierId,productId])
+}
+model PurchaseOrder {
+ id String @id @default(cuid())
+ orderNo String @unique
+ supplierId String
+ status PurchaseOrderStatus @default(DRAFT)
+ totalJpy Decimal @default(0) @db.Decimal(14,2)
+ expectedAt DateTime?
+ receivedAt DateTime?
+ notes String?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ supplier Supplier @relation(fields:[supplierId],references:[id])
+ items PurchaseOrderItem[]
+}
+model PurchaseOrderItem {
+ id String @id @default(cuid())
+ purchaseOrderId String
+ productId String
+ variantId String?
+ quantity Int
+ unitCostJpy Decimal @db.Decimal(14,2)
+ purchaseOrder PurchaseOrder @relation(fields:[purchaseOrderId],references:[id],onDelete:Cascade)
+ product Product @relation(fields:[productId],references:[id])
+ variant ProductVariant? @relation(fields:[variantId],references:[id])
+}
+model Notification {
+ id String @id @default(cuid())
+ userId String
+ title String
+ message String
+ readAt DateTime?
+ createdAt DateTime @default(now())
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ @@index([userId,readAt,createdAt])
+}
+
+model LoginAttempt {
+ id Int @id @default(autoincrement())
+ identifier String
+ success Boolean @default(false)
+ attemptedAt DateTime @default(now())
+ @@index([identifier,attemptedAt,success])
+}

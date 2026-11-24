@@ -1,0 +1,8 @@
+import {SignJWT,jwtVerify} from "jose";
+import {cookies,headers} from "next/headers";
+import {createHash,randomBytes} from "node:crypto";
+import {db} from "@/lib/prisma";
+const key=()=>{const s=process.env.AUTH_SECRET;if(!s||s.length<32)throw new Error("AUTH_SECRET must be 32+ characters");return new TextEncoder().encode(s);};
+export async function createSession(userId:string){const raw=randomBytes(32).toString("hex");const tokenHash=createHash("sha256").update(raw).digest("hex");const expiresAt=new Date(Date.now()+7*86400000);await db.session.create({data:{tokenHash,userId,expiresAt}});const jwt=await new SignJWT({sid:tokenHash}).setProtectedHeader({alg:"HS256"}).setSubject(userId).setIssuedAt().setExpirationTime("7d").sign(key());(await cookies()).set("bizwork_session",jwt,{httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"lax",path:"/",expires:expiresAt});}
+export async function currentUser(){const token=(await cookies()).get("bizwork_session")?.value;if(!token)return null;try{const {payload}=await jwtVerify(token,key());const session=await db.session.findUnique({where:{tokenHash:String(payload.sid||"")},include:{user:true}});if(!session||session.expiresAt<new Date()||session.user.status!=="APPROVED")return null;return session.user;}catch{return null;}}
+export async function audit(action:string,entityType:string,entityId:string|null,beforeData?:unknown,afterData?:unknown){const user=await currentUser();const h=await headers();await db.auditLog.create({data:{actorId:user?.id,action,entityType,entityId,beforeData:beforeData as never,afterData:afterData as never,ipAddress:h.get("x-forwarded-for")?.split(",")[0]||null}});}

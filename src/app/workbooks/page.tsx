@@ -1,0 +1,2 @@
+import {redirect} from "next/navigation";import {currentUser} from "@/lib/auth";import UniverEditor from "@/components/UniverEditor";
+export default async function Workbooks(){if(!await currentUser())redirect("/login");return <main className="p-5 md:p-8"><a href="/dashboard" className="text-sm text-blue-800">← Tổng quan</a><h1 className="text-3xl font-bold mt-3">Bảng tính nội bộ</h1><p className="text-gray-500 mt-1">Dùng Univer Community core Apache-2.0: chỉnh sửa, công thức, định dạng, lọc và sắp xếp. Không giả lập các chức năng chưa tích hợp.</p><UniverEditor/></main>}

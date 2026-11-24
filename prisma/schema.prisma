@@ -158,6 +158,7 @@ model Product {
  images ProductImage[]
  variants ProductVariant[]
  orderItems OrderItem[]
+ purchaseOrderItems PurchaseOrderItem[]
  supplierLinks SupplierProduct[]
  @@index([status,category])
 }

@@ -1,0 +1,2 @@
+import {redirect} from "next/navigation";import {currentUser} from "@/lib/auth";import UniverEditor from "@/components/UniverEditor";
+export default async function WorkbookPage({params}:{params:Promise<{id:string}>}){if(!await currentUser())redirect("/login");const {id}=await params;return <main className="p-4 md:p-6"><a href="/workbooks" className="text-sm text-blue-800">← Danh sách bảng tính</a><h1 className="text-2xl font-bold mt-2">Bảng tính</h1><UniverEditor workbookId={id}/></main>}

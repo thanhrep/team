@@ -4,6 +4,8 @@ enum UserStatus { PENDING APPROVED REJECTED LOCKED }
 enum Role { SUPER_ADMIN ADMIN MANAGER STAFF VIEWER }
 enum ProductStatus { DRAFT ACTIVE OUT_OF_STOCK DISCONTINUED }
 enum OrderStatus { NEW CONFIRMED PREPARING SHIPPED DELIVERED RETURNED CANCELLED }
+enum InventoryType { INBOUND OUTBOUND ADJUSTMENT }
+enum PurchaseOrderStatus { DRAFT SENT PARTIAL RECEIVED CANCELLED }
 model User {
  id String @id @default(cuid())
  name String
@@ -19,6 +21,8 @@ model User {
  updatedAt DateTime @updatedAt
  sessions Session[]
  auditLogs AuditLog[]
+ workbookPermissions WorkbookPermission[]
+ notifications Notification[]
  approvedBy User? @relation("Approvals",fields:[approvedById],references:[id])
  approvals User[] @relation("Approvals")
  @@index([status,createdAt])
@@ -54,6 +58,7 @@ model Workbook {
  updatedAt DateTime @updatedAt
  sheets WorkbookSheet[]
  versions WorkbookVersion[]
+ permissions WorkbookPermission[]
 }
 model WorkbookSheet {
  id String @id @default(cuid())
@@ -114,6 +119,7 @@ model Product {
  images ProductImage[]
  variants ProductVariant[]
  orderItems OrderItem[]
+ supplierLinks SupplierProduct[]
  @@index([status,category])
 }
 model ProductImage {
@@ -133,6 +139,9 @@ model ProductVariant {
  stock Int @default(0)
  sku String @unique
  product Product @relation(fields:[productId],references:[id],onDelete:Cascade)
+ inventoryBalance InventoryBalance?
+ inventoryTransactions InventoryTransaction[]
+ purchaseOrderItems PurchaseOrderItem[]
  @@unique([productId,size,color])
 }
 model Customer {
@@ -192,6 +201,8 @@ model Supplier {
  terms String?
  notes String?
  createdAt DateTime @default(now())
+ products SupplierProduct[]
+ purchaseOrders PurchaseOrder[]
 }
 model Expense {
  id String @id @default(cuid())
@@ -217,4 +228,96 @@ model SystemSetting {
  key String @id
  value Json
  updatedAt DateTime @updatedAt
+}
+
+model Permission {
+ id String @id @default(cuid())
+ module String
+ action String
+ description String?
+ roles RolePermission[]
+ @@unique([module,action])
+}
+model RolePermission {
+ role Role
+ permissionId String
+ permission Permission @relation(fields:[permissionId],references:[id],onDelete:Cascade)
+ @@id([role,permissionId])
+}
+model WorkbookPermission {
+ id String @id @default(cuid())
+ workbookId String
+ userId String
+ canView Boolean @default(true)
+ canEdit Boolean @default(false)
+ canExport Boolean @default(false)
+ createdAt DateTime @default(now())
+ workbook Workbook @relation(fields:[workbookId],references:[id],onDelete:Cascade)
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ @@unique([workbookId,userId])
+}
+model InventoryBalance {
+ id String @id @default(cuid())
+ variantId String @unique
+ quantity Int @default(0)
+ updatedAt DateTime @updatedAt
+ variant ProductVariant @relation(fields:[variantId],references:[id],onDelete:Cascade)
+}
+model InventoryTransaction {
+ id String @id @default(cuid())
+ variantId String
+ type InventoryType
+ quantity Int
+ reason String?
+ referenceId String?
+ createdBy String
+ createdAt DateTime @default(now())
+ variant ProductVariant @relation(fields:[variantId],references:[id])
+ @@index([variantId,createdAt])
+}
+model SupplierProduct {
+ id String @id @default(cuid())
+ supplierId String
+ productId String
+ supplierSku String?
+ costPriceJpy Decimal @db.Decimal(14,2)
+ leadTimeDays Int?
+ supplier Supplier @relation(fields:[supplierId],references:[id],onDelete:Cascade)
+ product Product @relation(fields:[productId],references:[id],onDelete:Cascade)
+ @@unique([supplierId,productId])
+}
+model PurchaseOrder {
+ id String @id @default(cuid())
+ orderNo String @unique
+ supplierId String
+ status PurchaseOrderStatus @default(DRAFT)
+ totalJpy Decimal @default(0) @db.Decimal(14,2)
+ expectedAt DateTime?
+ receivedAt DateTime?
+ notes String?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ supplier Supplier @relation(fields:[supplierId],references:[id])
+ items PurchaseOrderItem[]
+}
+model PurchaseOrderItem {
+ id String @id @default(cuid())
+ purchaseOrderId String
+ productId String
+ variantId String?
+ quantity Int
+ unitCostJpy Decimal @db.Decimal(14,2)
+ purchaseOrder PurchaseOrder @relation(fields:[purchaseOrderId],references:[id],onDelete:Cascade)
+ product Product @relation(fields:[productId],references:[id])
+ variant ProductVariant? @relation(fields:[variantId],references:[id])
+}
+model Notification {
+ id String @id @default(cuid())
+ userId String
+ title String
+ message String
+ readAt DateTime?
+ createdAt DateTime @default(now())
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ @@index([userId,readAt,createdAt])
 }

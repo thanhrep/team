@@ -1,0 +1,2 @@
+import {NextResponse} from "next/server";import {cookies} from "next/headers";import {db} from "@/lib/prisma";import {jwtVerify} from "jose";
+export async function POST(){const jar=await cookies();const token=jar.get("bizwork_session")?.value;if(token){try{const {payload}=await jwtVerify(token,new TextEncoder().encode(process.env.AUTH_SECRET!));await db.session.deleteMany({where:{tokenHash:String(payload.sid||"")}})}catch{}}jar.delete("bizwork_session");return NextResponse.redirect(new URL("/login",process.env.APP_URL||"http://localhost:3000"))}

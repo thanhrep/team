@@ -25,3 +25,13 @@ The new branch does not migrate or delete legacy database records or uploaded fi
 ## Roadmap and honest status
 Foundation: Next.js scaffold, Prisma schema, pending registration, login/session, user approval API, product API starter, protected media upload/list/rename/delete/view, dashboard and Docker skeleton.
 Not complete: fine-grained permissions, rate limiting and CSRF/origin controls, full product CRUD, Univer editor integration and persistence, XLSX/CSV import/export, real-time editing, inventory/order/customer/supplier/finance workflows, Japanese/English localization, optional AI streaming UI, backup/restore automation, migration and end-to-end tests. Do not deploy as production ERP until these are implemented and verified.
+
+## TEAMSPIRIT ERP staging
+
+The staging Next.js ERP uses Supabase Postgres when both `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are present. Both secrets belong on the **server**. With neither variable, the app uses local SQLite. With only one variable, startup requests fail instead of silently writing to a different database.
+
+Run `supabase/schema.sql` in the Supabase SQL Editor before enabling cloud mode. The schema stores one JSON record per ERP row with a stable ID, a server-only session table and an atomic compare-and-update function. RLS is enabled without public policies; browsers access data only through authenticated Next.js routes. Google Sheets synchronization is explicitly triggered by an Admin and compares each changed cell with the current Sheet value before updating. The Sheet is not the primary database.
+
+For a one-time import from local SQLite to an **empty** Supabase project, run `node scripts/migrate-to-supabase.mjs`. It refuses a populated destination and never removes the source. It rotates the imported Admin password and writes the new credentials into the ignored `data/cloud-admin-credentials.txt`. Back up SQLite before import. Verify with `node scripts/e2e-supabase-sheets.mjs`; this creates one test order and checks two independent sessions, duplicate detection, stale update protection and the actual Google Sheet row.
+
+For hosted staging, set Node.js 22 or newer, build with `npm ci && npm run build`, start with `npm run start`, and configure `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_SERVICE_ACCOUNT_JSON` and `GOOGLE_SHEET_ID` as server environment variables. Never deploy the SQLite mode to an ephemeral host as the primary business database. A public launch requires a separate security review, especially rate limits, CSRF/origin checks and media storage.

@@ -756,16 +756,22 @@ function AttendanceSheet({
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [localAttendance, setLocalAttendance] = useState(attendance);
+  const [localEmployees, setLocalEmployees] = useState(employees);
+  useEffect(() => {
+    setLocalAttendance(attendance);
+    setLocalEmployees(employees);
+  }, [month, attendance, employees]);
   const [year, monthNumber] = month.split("-").map(Number);
   const days = Array.from(
     { length: new Date(year, monthNumber, 0).getDate() },
     (_, index) => index + 1,
   );
-  const activeEmployees = employees.filter(
+  const activeEmployees = localEmployees.filter(
     (employee) => employee.status !== "Tạm nghỉ",
   );
   const attendanceFor = (employeeId: string, day: number) =>
-    attendance.find(
+    localAttendance.find(
       (row) =>
         row.employee_id === employeeId &&
         String(row.work_date) === `${month}-${String(day).padStart(2, "0")}`,
@@ -808,9 +814,21 @@ function AttendanceSheet({
       ),
     });
     setSaving(null);
-    if (!response.ok)
+    if (!response.ok) {
       setNotice((await response.json()).error || "Không thể lưu chấm công.");
-    else reload();
+    } else if (current) {
+      setLocalAttendance((items) =>
+        items.map((item) =>
+          item.id === current.id ? { ...item, status: value || "Nghỉ" } : item,
+        ),
+      );
+    } else {
+      const saved = await response
+        .clone()
+        .json()
+        .catch(() => null);
+      if (saved?.row) setLocalAttendance((items) => [...items, saved.row]);
+    }
   }
 
   async function saveEmployeeValue(
@@ -830,9 +848,15 @@ function AttendanceSheet({
         changes: { [key]: numeric },
       }),
     });
-    if (!response.ok)
+    if (!response.ok) {
       setNotice((await response.json()).error || "Không thể lưu tiền lương.");
-    else reload();
+    } else {
+      setLocalEmployees((items) =>
+        items.map((item) =>
+          item.id === employee.id ? { ...item, [key]: numeric } : item,
+        ),
+      );
+    }
   }
 
   function exportCsv() {

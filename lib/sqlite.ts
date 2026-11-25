@@ -14,8 +14,11 @@ mkdirSync(dataDir, { recursive: true });
 // an isolated in-memory database during that build phase so concurrent module
 // evaluation cannot lock the production SQLite file. Runtime requests still
 // use the persistent database configured by TEAMSPIRIT_DATA_DIR.
+const isBuild =
+  process.env.NEXT_PHASE === "phase-production-build" ||
+  process.env.npm_lifecycle_event === "build";
 const dbFile =
-  process.env.NEXT_PHASE === "phase-production-build"
+  isBuild
     ? ":memory:"
     : join(dataDir, "teamspirit.sqlite");
 const db = new DatabaseSync(dbFile);
@@ -75,7 +78,7 @@ CREATE TABLE IF NOT EXISTS finance (id TEXT PRIMARY KEY, kind TEXT NOT NULL, cat
 CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT, url TEXT, category TEXT, created_at TEXT NOT NULL);
 `);
 
-if (process.env.NEXT_PHASE !== "phase-production-build") {
+if (!isBuild) {
   const bootstrapPassword = process.env.TEAMSPIRIT_ADMIN_PASSWORD;
   if (
     bootstrapPassword &&
@@ -100,7 +103,7 @@ if (process.env.NEXT_PHASE !== "phase-production-build") {
   }
 }
 if (
-  process.env.NEXT_PHASE !== "phase-production-build" &&
+  !isBuild &&
   process.env.TEAMSPIRIT_DEMO_DATA === "true"
 ) {
   seed(

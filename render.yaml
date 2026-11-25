@@ -1,5 +1,5 @@
 # Temporary public BIZWORK test deployment on Render.
-# Authentication bypass is enabled only for this disposable test environment.
+# Require login for this environment.
 databases:
   - name: bizwork-test-db
     databaseName: bizwork_db
@@ -31,4 +31,4 @@ services:
       - key: ADMIN_INIT_PASSWORD
         generateValue: true
       - key: BIZWORK_AUTH_DISABLED
-        value: "true"
+        value: "false"

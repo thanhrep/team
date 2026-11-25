@@ -1,0 +1,66 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { db, all, insert, summary, update, userFromToken } from '../../../lib/sqlite';
+
+export const runtime = 'nodejs';
+const cookie = 'teamspirit_session';
+const tables = ['customers','products','media','orders','inventory','employees','attendance','finance','users'];
+const departments: Record<string,string[]> = {
+  SUPER_ADMIN: tables, MANAGER: tables.filter(t=>t!=='users'),
+  SALES:['customers','products','orders','media'], WAREHOUSE:['products','inventory','orders'],
+  ACCOUNTING:['finance','employees','attendance'], STAFF:['products','media']
+};
+const readTables = (role:unknown) => departments[String(role)] ?? [];
+const validRoles = Object.keys(departments);
+export async function GET(request: NextRequest) {
+  const user = userFromToken(request.cookies.get(cookie)?.value);
+  if (!user) return NextResponse.json({ error: 'Vui lòng đăng nhập.' }, { status: 401 });
+  const month = request.nextUrl.searchParams.get('month') || new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Ho_Chi_Minh'}).format(new Date()).slice(0,7);
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return NextResponse.json({error:'Kỳ lương không hợp lệ.'},{status:400});
+  const allowed=readTables(user.role);
+  const employees = all('employees');
+  const attendance = all('attendance');
+  const payroll = employees.map(employee => {
+    const days = new Set(attendance.filter(row => row.employee_id === employee.code && row.status === 'Đi làm' && String(row.work_date).startsWith(month+'-')).map(row=>row.work_date)).size;
+    return { ...employee, work_days: days, estimated_salary: Math.round(Number(employee.salary_jpy || 0) * days / 22) };
+  });
+  const safeTables = Object.fromEntries(allowed.map(table => {
+    const rows = all(table);
+    return [table, table === 'users' ? rows.map(({ password_hash: _password, ...safe }) => safe) : rows];
+  }));
+  return NextResponse.json({ user: { id:user.id, name:user.name, email:user.email, role:user.role }, month, summary:allowed.includes('finance')?summary():{orders:0,pendingOrders:0,month:[],revenue:null,expenses:null,profit:null}, tables:{...safeTables,...(allowed.includes('employees')?{payroll}:{})} });
+}
+export async function POST(request: NextRequest) {
+  const user = userFromToken(request.cookies.get(cookie)?.value);
+  if (!user) return NextResponse.json({ error:'Phiên đăng nhập đã hết hạn.' }, { status:401 });
+  const body = await request.json();
+  if (body.action === 'approveUser') {
+    if (user.role !== 'SUPER_ADMIN') return NextResponse.json({ error:'Chỉ Admin mới được duyệt tài khoản.' }, { status:403 });
+    if (!validRoles.includes(body.role || 'STAFF')) return NextResponse.json({error:'Vai trò không hợp lệ.'},{status:400});
+    update('users', body.id, { status:'APPROVED', role: body.role || 'STAFF' });
+    return NextResponse.json({ ok:true });
+  }
+  if (!readTables(user.role).includes(body.table) || (user.role==='STAFF') || (user.role==='WAREHOUSE' && body.table==='orders') || (user.role==='SALES' && body.table==='products')) return NextResponse.json({error:'Không có quyền ghi danh mục này.'},{status:403});
+  const fields = body.action==='update'?body.changes:body.data;
+  const schema = db.prepare('SELECT name FROM pragma_table_info(?)').all(body.table).map(row=>row.name);
+  if (!fields || !Object.keys(fields).length || Object.keys(fields).some(k=>!schema.includes(k)||['id','created_at','password_hash'].includes(k))) return NextResponse.json({error:'Cột không hợp lệ.'},{status:400});
+  if (body.table==='users' && (body.action!=='update'||Object.keys(fields).some(k=>!['status','role'].includes(k)) || ('role' in fields && !validRoles.includes(fields.role)) || ('status' in fields && !['PENDING','APPROVED'].includes(fields.status)))) return NextResponse.json({error:'Thay đổi tài khoản không hợp lệ.'},{status:400});
+  if (body.table === 'users' && user.role !== 'SUPER_ADMIN') return NextResponse.json({ error:'Bạn không có quyền quản trị tài khoản.' }, { status:403 });
+  if (body.action === 'update') { db.exec('BEGIN IMMEDIATE');
+    try {
+      const current=db.prepare('SELECT * FROM '+body.table+' WHERE id=?').get(body.id);
+      if (!current || !body.expected || Object.keys(fields).some(k=>current[k]!==body.expected[k])) {
+        db.exec('ROLLBACK');
+        return NextResponse.json({error:'Dòng đã thay đổi. Tải lại để đối chiếu.'},{status:409});
+      }
+      update(body.table,body.id,fields);
+      db.exec('COMMIT');
+    } catch(e) { db.exec('ROLLBACK'); throw e; } return NextResponse.json({ ok:true }); }
+  if (body.action === 'add') { const data = body.data || {}; const table=body.table; if(table==='orders'){
+    if(!String(data.order_no??'').trim() || !String(data.customer_name??'').trim()) return NextResponse.json({error:'Cần mã đơn và tên khách hàng.'},{status:400});
+    data.order_no=String(data.order_no).trim();
+    if(db.prepare('SELECT 1 FROM orders WHERE order_no=?').get(data.order_no)) return NextResponse.json({error:'Mã đơn này đã tồn tại.'},{status:409});
+    if(!Number.isSafeInteger(Number(data.quantity??1)) || Number(data.quantity??1)<1 || !Number.isFinite(Number(data.total_jpy??0)) || Number(data.total_jpy??0)<0) return NextResponse.json({error:'Số lượng hoặc tổng tiền không hợp lệ.'},{status:400});
+  }
+  const row={...data,id:`${table.slice(0,3)}_${crypto.randomUUID()}`,...(schema.includes('created_at')?{created_at:new Date().toISOString()}:{})}; insert(table,row); return NextResponse.json({ ok:true,row }); }
+  return NextResponse.json({ error:'Thao tác không hợp lệ.' }, { status:400 });
+}

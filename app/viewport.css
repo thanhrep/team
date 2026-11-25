@@ -1,0 +1,7 @@
+/* Bố cục toàn màn hình cho khu vực bảng tính */
+.content { padding: 28px clamp(18px, 2.2vw, 42px); max-width: none; width: 100%; min-height: calc(100vh - 91px); }
+.google-sheet-card { width: 100%; max-width: none; }
+.google-sheet-canvas { height: calc(100vh - 285px); min-height: 620px; width: 100%; }
+.google-sheet-canvas .univer-container { width: 100% !important; height: 100% !important; }
+@media (min-width: 1500px) { .content { padding-left: 36px; padding-right: 36px; } }
+@media (max-width: 760px) { .content { padding: 18px 12px; } .google-sheet-canvas { height: calc(100vh - 320px); min-height: 520px; } .google-sheet-toolbar { align-items: flex-start; flex-direction: column; } .google-sheet-toolbar .primary-btn { width: 100%; justify-content: center; } }

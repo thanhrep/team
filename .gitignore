@@ -10,3 +10,11 @@ htmlcov/
 *.sqlite3
 backend/app/static/uploads/*
 !backend/app/static/uploads/.gitkeep
+.next/
+node_modules/
+data/
+data-prebuild-*/
+tsconfig.tsbuildinfo
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

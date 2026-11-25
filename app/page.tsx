@@ -257,15 +257,15 @@ export default function Home() {
       .format(new Date())
       .slice(0, 7),
   );
-  async function load() {
-    setBusy(true);
+  async function load(showLoading = true) {
+    if (showLoading) setBusy(true);
     const r = await fetch("/api/erp?month=" + month);
     if (r.ok) {
       const j = await r.json();
       setUser(j.user);
       setData(j);
     }
-    setBusy(false);
+    if (showLoading) setBusy(false);
   }
   useEffect(() => {
     load();
@@ -608,7 +608,7 @@ function SheetWorkspace({
 }: {
   tables: any;
   query: string;
-  reload: () => void;
+  reload: (showLoading?: boolean) => Promise<void>;
   user: Row;
 }) {
   const [sheet, setSheet] = useState<Module>(
@@ -635,6 +635,10 @@ function SheetWorkspace({
     const body = await response.json();
     if (!response.ok)
       throw new Error(body.error || "Đồng bộ Google Sheets thất bại.");
+    // The ERP write and the Google Sheets sync are complete. Refresh the
+    // in-memory table without showing the full-page loading screen so that
+    // switching tabs cannot restore stale rows from the previous snapshot.
+    await reload(false);
   }
   return (
     <div className="sheet-workspace">

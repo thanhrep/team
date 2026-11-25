@@ -18,7 +18,7 @@ const layouts: Record<string, string[]> = {
     "stock",
     "status",
   ],
-  "Thư viện ảnh": ["name", "type", "category", "url"],
+  "Kho sản phẩm": ["name", "type", "category", "url"],
   "Đơn đặt may": [
     "order_no",
     "customer_name",

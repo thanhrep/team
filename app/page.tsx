@@ -259,13 +259,30 @@ export default function Home() {
   );
   async function load(showLoading = true) {
     if (showLoading) setBusy(true);
-    const r = await fetch("/api/erp?month=" + month);
-    if (r.ok) {
-      const j = await r.json();
+    try {
+      const r = await fetch("/api/erp?month=" + month, {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setUser(null);
+        setData(null);
+        if (showLoading && r.status !== 401)
+          setNotice(j.error || "Không thể tải dữ liệu ERP.");
+        return;
+      }
       setUser(j.user);
       setData(j);
+      setNotice("");
+    } catch {
+      setUser(null);
+      setData(null);
+      if (showLoading)
+        setNotice("Không thể kết nối máy chủ. Vui lòng thử lại.");
+    } finally {
+      if (showLoading) setBusy(false);
     }
-    if (showLoading) setBusy(false);
   }
   useEffect(() => {
     load();

@@ -124,6 +124,8 @@ const columns: Record<string, string[]> = {
     "department",
     "position",
     "salary_jpy",
+    "salary_vnd",
+    "commission_vnd",
     "phone",
     "status",
   ],
@@ -188,6 +190,8 @@ const headers: Record<string, string> = {
   occurred_at: "Ngày phát sinh",
   role: "Vai trò",
   created_at: "Ngày tạo",
+  salary_vnd: "Lương cơ bản (VND)",
+  commission_vnd: "Hoa hồng (VND)",
 };
 const options: Record<string, string[]> = {
   role: ["STAFF", "SALES", "WAREHOUSE", "ACCOUNTING", "MANAGER", "SUPER_ADMIN"],
@@ -205,6 +209,8 @@ const moneyKeys = [
   "sale_jpy",
   "total_jpy",
   "salary_jpy",
+  "salary_vnd",
+  "commission_vnd",
   "estimated_salary",
   "amount_jpy",
 ];
@@ -382,7 +388,9 @@ export default function Home() {
           </div>
         </header>
         <div className="content">
-          {(module === "payroll" || module === "sheets") && (
+          {(module === "payroll" ||
+            module === "sheets" ||
+            module === "attendance") && (
             <label>
               Kỳ lương{" "}
               <input
@@ -403,6 +411,13 @@ export default function Home() {
               query={query}
               reload={load}
               user={user}
+            />
+          ) : module === "attendance" ? (
+            <AttendanceSheet
+              attendance={data.tables.attendance || []}
+              employees={data.tables.employees || []}
+              month={month}
+              reload={load}
             />
           ) : (
             <ModuleView
@@ -727,6 +742,343 @@ function EditableCell({
     />
   );
 }
+function AttendanceSheet({
+  attendance,
+  employees,
+  month,
+  reload,
+}: {
+  attendance: Row[];
+  employees: Row[];
+  month: string;
+  reload: () => void;
+}) {
+  const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState<string | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [year, monthNumber] = month.split("-").map(Number);
+  const days = Array.from(
+    { length: new Date(year, monthNumber, 0).getDate() },
+    (_, index) => index + 1,
+  );
+  const activeEmployees = employees.filter(
+    (employee) => employee.status !== "Tạm nghỉ",
+  );
+  const attendanceFor = (employeeId: string, day: number) =>
+    attendance.find(
+      (row) =>
+        row.employee_id === employeeId &&
+        String(row.work_date) === `${month}-${String(day).padStart(2, "0")}`,
+    );
+  const currency = (value: number) =>
+    new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
+      maximumFractionDigits: 0,
+    }).format(value || 0);
+
+  async function setDay(employee: Row, day: number, value: string) {
+    const date = `${month}-${String(day).padStart(2, "0")}`;
+    const current = attendanceFor(String(employee.code), day);
+    setSaving(`${employee.code}-${day}`);
+    const response = await fetch("/api/erp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        current
+          ? {
+              action: "update",
+              table: "attendance",
+              id: current.id,
+              expected: { status: current.status },
+              changes: { status: value || "Nghỉ" },
+            }
+          : {
+              action: "add",
+              table: "attendance",
+              data: {
+                employee_id: employee.code,
+                work_date: date,
+                status: value || "Nghỉ",
+                time_in: "",
+                time_out: "",
+                note: "",
+              },
+            },
+      ),
+    });
+    setSaving(null);
+    if (!response.ok)
+      setNotice((await response.json()).error || "Không thể lưu chấm công.");
+    else reload();
+  }
+
+  async function saveEmployeeValue(
+    employee: Row,
+    key: "salary_vnd" | "commission_vnd",
+    value: string,
+  ) {
+    const numeric = Math.max(0, Number(value) || 0);
+    const response = await fetch("/api/erp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update",
+        table: "employees",
+        id: employee.id,
+        expected: { [key]: employee[key] ?? null },
+        changes: { [key]: numeric },
+      }),
+    });
+    if (!response.ok)
+      setNotice((await response.json()).error || "Không thể lưu tiền lương.");
+    else reload();
+  }
+
+  function exportCsv() {
+    const lines = [
+      [
+        "Mã NV",
+        "Họ tên",
+        ...days.map((day) => `${day}/${String(monthNumber).padStart(2, "0")}`),
+        "Ngày công",
+        "Lương cơ bản VND/24",
+        "Hoa hồng VND",
+        "Tổng lương VND",
+      ],
+      ...activeEmployees.map((employee) => {
+        const workDays = days.filter(
+          (day) =>
+            attendanceFor(String(employee.code), day)?.status === "Đi làm",
+        ).length;
+        const base = Number(employee.salary_vnd || 0);
+        const commission = Number(employee.commission_vnd || 0);
+        return [
+          employee.code,
+          employee.name,
+          ...days.map((day) =>
+            attendanceFor(String(employee.code), day)?.status === "Đi làm"
+              ? "✓"
+              : "✕",
+          ),
+          workDays,
+          Math.round(base / 24),
+          commission,
+          Math.round((base / 24) * workDays + commission),
+        ];
+      }),
+    ];
+    const csv = lines
+      .map((line) =>
+        line
+          .map((value) => `"${String(value).replaceAll('"', '""')}"`)
+          .join(","),
+      )
+      .join("\n");
+    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `cham-cong-${month}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  return (
+    <div className="attendance-sheet module-view">
+      <div className="module-toolbar">
+        <div>
+          <span className="eyebrow">BẢNG CHẤM CÔNG THEO THÁNG</span>
+          <h2>Chấm công {month}</h2>
+          <p>
+            Chọn ✓ để ghi Đi làm, ✕ để ghi Nghỉ. Lương tính theo 24 ngày công.
+          </p>
+        </div>
+        <div className="toolbar-actions">
+          <button className="secondary-btn" onClick={exportCsv}>
+            <Download size={14} /> Xuất bảng
+          </button>
+        </div>
+      </div>
+      {notice && (
+        <div className="notice inline-notice">
+          {notice}
+          <button onClick={() => setNotice("")} aria-label="Đóng">
+            ×
+          </button>
+        </div>
+      )}
+      <div className="table-wrap attendance-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th className="sticky-employee">Mã NV / Họ tên</th>
+              {days.map((day) => (
+                <th className="day-head" key={day}>
+                  {day}
+                  <small>
+                    {new Date(year, monthNumber - 1, day)
+                      .toLocaleDateString("vi-VN", { weekday: "short" })
+                      .replace("Th ", "T")}
+                  </small>
+                </th>
+              ))}
+              <th>Ngày công</th>
+              <th>
+                Lương cơ bản
+                <br />
+                VND/24
+              </th>
+              <th>
+                Hoa hồng
+                <br />
+                VND
+              </th>
+              <th>
+                Tổng lương
+                <br />
+                VND
+              </th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {activeEmployees.map((employee) => {
+              const workDays = days.filter(
+                (day) =>
+                  attendanceFor(String(employee.code), day)?.status ===
+                  "Đi làm",
+              ).length;
+              const base = Number(employee.salary_vnd || 0);
+              const commission = Number(employee.commission_vnd || 0);
+              const total = Math.round((base / 24) * workDays + commission);
+              return (
+                <tr key={employee.id}>
+                  <td className="sticky-employee">
+                    <b>{employee.code}</b>
+                    <span>{employee.name}</span>
+                  </td>
+                  {days.map((day) => {
+                    const current = attendanceFor(String(employee.code), day);
+                    const value =
+                      current?.status === "Đi làm"
+                        ? "Đi làm"
+                        : current
+                          ? "Nghỉ"
+                          : "";
+                    const key = `${employee.code}-${day}`;
+                    return (
+                      <td className="attendance-mark" key={day}>
+                        <select
+                          aria-label={`${employee.name} ngày ${day}`}
+                          value={value}
+                          disabled={saving === key}
+                          onChange={(event) =>
+                            setDay(employee, day, event.target.value)
+                          }
+                        >
+                          <option value="">—</option>
+                          <option value="Đi làm">✓</option>
+                          <option value="Nghỉ">✕</option>
+                        </select>
+                      </td>
+                    );
+                  })}
+                  <td className="work-days">
+                    <strong>{workDays}</strong>/24
+                  </td>
+                  <td>
+                    <input
+                      className="salary-input"
+                      type="number"
+                      min="0"
+                      step="1000"
+                      defaultValue={base || ""}
+                      placeholder="Nhập VND"
+                      onBlur={(event) =>
+                        saveEmployeeValue(
+                          employee,
+                          "salary_vnd",
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="salary-input"
+                      type="number"
+                      min="0"
+                      step="1000"
+                      defaultValue={commission || ""}
+                      placeholder="Nhập VND"
+                      onBlur={(event) =>
+                        saveEmployeeValue(
+                          employee,
+                          "commission_vnd",
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </td>
+                  <td className="total-salary">{currency(total)}</td>
+                  <td className="actions-cell">
+                    <button
+                      className="dots-button"
+                      aria-label={`Thao tác ${employee.name}`}
+                      onClick={() =>
+                        setOpenMenu(
+                          openMenu === employee.id ? null : employee.id,
+                        )
+                      }
+                    >
+                      <MoreHorizontal size={17} />
+                    </button>
+                    {openMenu === employee.id && (
+                      <div className="row-menu">
+                        <button
+                          onClick={() => {
+                            setOpenMenu(null);
+                            document
+                              .querySelector(
+                                `[aria-label="${employee.name} ngày 1"]`,
+                              )
+                              ?.scrollIntoView({
+                                behavior: "smooth",
+                                block: "center",
+                              });
+                          }}
+                        >
+                          <Pencil size={14} /> Sửa chấm công
+                        </button>
+                        <button
+                          onClick={() => {
+                            setOpenMenu(null);
+                            saveEmployeeValue(
+                              employee,
+                              "salary_vnd",
+                              String(employee.salary_vnd || 0),
+                            );
+                          }}
+                        >
+                          <Check size={14} /> Lưu lương
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="table-hint">
+        Các ô ngày dùng lựa chọn ✓/✕ · Lương cơ bản và hoa hồng được lưu theo
+        từng nhân viên · kéo ngang để xem đủ tháng.
+      </p>
+    </div>
+  );
+}
+
 function LegacyModuleView({
   module,
   rows,
@@ -929,68 +1281,322 @@ function ModuleView({
   const [adding, setAdding] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState("");
   const shown = useMemo(
-    () => rows.filter(row => !query || Object.values(row).some(v => String(v ?? '').toLowerCase().includes(query.toLowerCase()))),
+    () =>
+      rows.filter(
+        (row) =>
+          !query ||
+          Object.values(row).some((v) =>
+            String(v ?? "")
+              .toLowerCase()
+              .includes(query.toLowerCase()),
+          ),
+      ),
     [rows, query],
   );
   const cols = columns[module] || [];
-  const readOnly = module === 'payroll';
+  const readOnly = module === "payroll";
 
   async function save(id: string, key: string, value: string) {
-    const numeric = key.includes('jpy') || ['stock', 'quantity', 'work_days'].includes(key);
-    const response = await fetch('/api/erp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update', table: module, id, expected: { [key]: rows.find(r => r.id === id)?.[key] ?? null }, changes: { [key]: numeric ? Number(value) : value } }) });
-    if (!response.ok) setNotice((await response.json()).error || 'Không thể lưu thay đổi.');
+    const numeric =
+      key.includes("jpy") || ["stock", "quantity", "work_days"].includes(key);
+    const response = await fetch("/api/erp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update",
+        table: module,
+        id,
+        expected: { [key]: rows.find((r) => r.id === id)?.[key] ?? null },
+        changes: { [key]: numeric ? Number(value) : value },
+      }),
+    });
+    if (!response.ok)
+      setNotice((await response.json()).error || "Không thể lưu thay đổi.");
     else reload();
   }
 
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const raw = Object.fromEntries(new FormData(event.currentTarget));
-    const data = Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, key.includes('jpy') || ['stock', 'quantity'].includes(key) ? Number(value) : value]));
-    const response = await fetch('/api/erp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add', table: module, data }) });
-    if (!response.ok) { setNotice((await response.json()).error || 'Không thể thêm dữ liệu.'); return; }
-    setAdding(false); reload();
+    const data = Object.fromEntries(
+      Object.entries(raw).map(([key, value]) => [
+        key,
+        key.includes("jpy") || ["stock", "quantity"].includes(key)
+          ? Number(value)
+          : value,
+      ]),
+    );
+    const response = await fetch("/api/erp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "add", table: module, data }),
+    });
+    if (!response.ok) {
+      setNotice((await response.json()).error || "Không thể thêm dữ liệu.");
+      return;
+    }
+    setAdding(false);
+    reload();
   }
 
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setUploading(true);
-    const response = await fetch('/api/media/upload', { method: 'POST', body: new FormData(event.currentTarget) });
+    const response = await fetch("/api/media/upload", {
+      method: "POST",
+      body: new FormData(event.currentTarget),
+    });
     const body = await response.json();
     setUploading(false);
-    if (!response.ok) { setNotice(body.error || 'Tải ảnh thất bại.'); return; }
-    setNotice('Đã tải ảnh và lưu vào thư viện.'); reload();
+    if (!response.ok) {
+      setNotice(body.error || "Tải ảnh thất bại.");
+      return;
+    }
+    setNotice("Đã tải ảnh và lưu vào thư viện.");
+    reload();
   }
 
   async function approve(id: string) {
-    await fetch('/api/erp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'approveUser', id }) });
+    await fetch("/api/erp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approveUser", id }),
+    });
     reload();
   }
 
   async function remove(id: string) {
-    if (!window.confirm('Xóa dòng dữ liệu này?')) return;
-    const response = await fetch('/api/erp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', table: module, id }) });
+    if (!window.confirm("Xóa dòng dữ liệu này?")) return;
+    const response = await fetch("/api/erp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", table: module, id }),
+    });
     const body = await response.json();
-    setNotice(response.ok ? 'Đã xóa dữ liệu.' : body.error || 'Không thể xóa.');
+    setNotice(response.ok ? "Đã xóa dữ liệu." : body.error || "Không thể xóa.");
     setOpenMenu(null);
     if (response.ok) reload();
   }
 
   function exportCsv() {
-    const csv = [cols.map(key => headers[key] || key), ...shown.map(row => cols.map(key => String(row[key] ?? '')))].map(line => line.map(value => `"${value.replaceAll('"', '""')}"`).join(',')).join('\n');
-    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' });
-    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `teamspirit-${module}.csv`; link.click(); URL.revokeObjectURL(link.href);
+    const csv = [
+      cols.map((key) => headers[key] || key),
+      ...shown.map((row) => cols.map((key) => String(row[key] ?? ""))),
+    ]
+      .map((line) =>
+        line.map((value) => `"${value.replaceAll('"', '""')}"`).join(","),
+      )
+      .join("\n");
+    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `teamspirit-${module}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
   }
 
-  return <div className="module-view">
-    <div className="module-toolbar"><div><span className="eyebrow">BẢNG DỮ LIỆU TRỰC TIẾP</span><p>{shown.length} bản ghi · nhấn vào ô để sửa và tự lưu</p></div><div className="toolbar-actions">{module === 'media' && <button className="secondary-btn" onClick={() => setUploading(true)}><ImageIcon size={14} /> Tải ảnh lên</button>}<button className="secondary-btn" onClick={exportCsv}><Download size={14} /> Xuất CSV</button><button className="primary-btn" onClick={() => setAdding(true)}>+ Thêm {labels[module] || 'bản ghi'}</button></div></div>
-    {notice && <div className="notice inline-notice">{notice}<button onClick={() => setNotice('')} aria-label="Đóng">×</button></div>}
-    {uploading && <form className="inline-form media-upload-form" onSubmit={upload}><label>Chọn ảnh<input name="file" type="file" accept="image/*" required /></label><label>Danh mục<input name="category" defaultValue="Sản phẩm" required /></label><div><button className="primary-btn" disabled={uploading}>{uploading ? 'Đang tải…' : 'Lưu ảnh'}</button><button type="button" className="secondary-btn" onClick={() => setUploading(false)}>Hủy</button></div></form>}
-    {adding && <form className="inline-form" onSubmit={add}>{cols.filter(key => !['created_at', 'status', 'role'].includes(key)).slice(0, 6).map(key => <label key={key}>{headers[key] || key}<input name={key} required={['name', 'sku', 'order_no', 'code'].includes(key)} placeholder={headers[key] || key} /></label>)}<div><button className="primary-btn">Lưu</button><button type="button" className="secondary-btn" onClick={() => setAdding(false)}>Hủy</button></div></form>}
-    <div className="table-wrap"><table><thead><tr><th>#</th>{cols.map(key => <th key={key}>{headers[key] || key}</th>)}<th>Thao tác</th></tr></thead><tbody>{shown.map((row, index) => <tr key={row.id || index} data-row-id={row.id}><td className="row-number">{index + 1}</td>{cols.map(key => <td key={key}>{module === 'media' && key === 'url' ? <a className="media-link" href={String(row[key] || '')} target="_blank" rel="noreferrer"><img className="media-thumb" src={String(row[key] || '')} alt={String(row.name || 'Ảnh sản phẩm')} /></a> : <EditableCell row={row} keyName={key} readOnly={readOnly} onSave={value => save(row.id, key, value)} />}</td>)}<td className="actions-cell">{module === 'users' && row.status === 'PENDING' && user.role === 'SUPER_ADMIN' ? <button className="secondary-btn" onClick={() => approve(row.id)}><Check size={14} /> Duyệt</button> : <><button className="dots-button" aria-label={`Thao tác ${row.name || row.id}`} onClick={() => setOpenMenu(openMenu === row.id ? null : row.id)}><MoreHorizontal size={17} /></button>{openMenu === row.id && <div className="row-menu"><button onClick={() => { setOpenMenu(null); if (row.url) window.open(String(row.url), '_blank', 'noopener,noreferrer'); }}><ExternalLink size={14} /> Mở ảnh</button><button onClick={() => { setOpenMenu(null); (document.querySelector(`[data-row-id="${row.id}"] input`) as HTMLInputElement | null)?.focus(); }}><Pencil size={14} /> Sửa dòng</button><button className="danger-action" onClick={() => remove(row.id)}><Trash2 size={14} /> Xóa</button></div>}</>}</td></tr>)}{!shown.length && <tr><td colSpan={cols.length + 2} className="empty">Chưa có dữ liệu phù hợp.</td></tr>}</tbody></table></div>
-    <p className="table-hint">Nhấn vào ô để chỉnh sửa · mở menu `•••` để xem, sửa hoặc xóa.</p>{module === 'payroll' && <Payroll rows={rows} />}
-  </div>;
+  return (
+    <div className="module-view">
+      <div className="module-toolbar">
+        <div>
+          <span className="eyebrow">BẢNG DỮ LIỆU TRỰC TIẾP</span>
+          <p>{shown.length} bản ghi · nhấn vào ô để sửa và tự lưu</p>
+        </div>
+        <div className="toolbar-actions">
+          {module === "media" && (
+            <button
+              className="secondary-btn"
+              onClick={() => setUploading(true)}
+            >
+              <ImageIcon size={14} /> Tải ảnh lên
+            </button>
+          )}
+          <button className="secondary-btn" onClick={exportCsv}>
+            <Download size={14} /> Xuất CSV
+          </button>
+          <button className="primary-btn" onClick={() => setAdding(true)}>
+            + Thêm {labels[module] || "bản ghi"}
+          </button>
+        </div>
+      </div>
+      {notice && (
+        <div className="notice inline-notice">
+          {notice}
+          <button onClick={() => setNotice("")} aria-label="Đóng">
+            ×
+          </button>
+        </div>
+      )}
+      {uploading && (
+        <form className="inline-form media-upload-form" onSubmit={upload}>
+          <label>
+            Chọn ảnh
+            <input name="file" type="file" accept="image/*" required />
+          </label>
+          <label>
+            Danh mục
+            <input name="category" defaultValue="Sản phẩm" required />
+          </label>
+          <div>
+            <button className="primary-btn" disabled={uploading}>
+              {uploading ? "Đang tải…" : "Lưu ảnh"}
+            </button>
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={() => setUploading(false)}
+            >
+              Hủy
+            </button>
+          </div>
+        </form>
+      )}
+      {adding && (
+        <form className="inline-form" onSubmit={add}>
+          {cols
+            .filter((key) => !["created_at", "status", "role"].includes(key))
+            .slice(0, 6)
+            .map((key) => (
+              <label key={key}>
+                {headers[key] || key}
+                <input
+                  name={key}
+                  required={["name", "sku", "order_no", "code"].includes(key)}
+                  placeholder={headers[key] || key}
+                />
+              </label>
+            ))}
+          <div>
+            <button className="primary-btn">Lưu</button>
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={() => setAdding(false)}
+            >
+              Hủy
+            </button>
+          </div>
+        </form>
+      )}
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              {cols.map((key) => (
+                <th key={key}>{headers[key] || key}</th>
+              ))}
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((row, index) => (
+              <tr key={row.id || index} data-row-id={row.id}>
+                <td className="row-number">{index + 1}</td>
+                {cols.map((key) => (
+                  <td key={key}>
+                    {module === "media" && key === "url" ? (
+                      <a
+                        className="media-link"
+                        href={String(row[key] || "")}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <img
+                          className="media-thumb"
+                          src={String(row[key] || "")}
+                          alt={String(row.name || "Ảnh sản phẩm")}
+                        />
+                      </a>
+                    ) : (
+                      <EditableCell
+                        row={row}
+                        keyName={key}
+                        readOnly={readOnly}
+                        onSave={(value) => save(row.id, key, value)}
+                      />
+                    )}
+                  </td>
+                ))}
+                <td className="actions-cell">
+                  {module === "users" &&
+                  row.status === "PENDING" &&
+                  user.role === "SUPER_ADMIN" ? (
+                    <button
+                      className="secondary-btn"
+                      onClick={() => approve(row.id)}
+                    >
+                      <Check size={14} /> Duyệt
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        className="dots-button"
+                        aria-label={`Thao tác ${row.name || row.id}`}
+                        onClick={() =>
+                          setOpenMenu(openMenu === row.id ? null : row.id)
+                        }
+                      >
+                        <MoreHorizontal size={17} />
+                      </button>
+                      {openMenu === row.id && (
+                        <div className="row-menu">
+                          <button
+                            onClick={() => {
+                              setOpenMenu(null);
+                              if (row.url)
+                                window.open(
+                                  String(row.url),
+                                  "_blank",
+                                  "noopener,noreferrer",
+                                );
+                            }}
+                          >
+                            <ExternalLink size={14} /> Mở ảnh
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOpenMenu(null);
+                              (
+                                document.querySelector(
+                                  `[data-row-id="${row.id}"] input`,
+                                ) as HTMLInputElement | null
+                              )?.focus();
+                            }}
+                          >
+                            <Pencil size={14} /> Sửa dòng
+                          </button>
+                          <button
+                            className="danger-action"
+                            onClick={() => remove(row.id)}
+                          >
+                            <Trash2 size={14} /> Xóa
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {!shown.length && (
+              <tr>
+                <td colSpan={cols.length + 2} className="empty">
+                  Chưa có dữ liệu phù hợp.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="table-hint">
+        Nhấn vào ô để chỉnh sửa · mở menu `•••` để xem, sửa hoặc xóa.
+      </p>
+      {module === "payroll" && <Payroll rows={rows} />}
+    </div>
+  );
 }
 
 function Payroll({ rows }: { rows: Row[] }) {

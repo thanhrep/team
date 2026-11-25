@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeWithAi, type AiProvider } from '../../../../lib/ai-server';
 import { rows, sessionUser } from '../../../../lib/store';
+import { sameOrigin } from '../../../../lib/request-security';
 
 export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
+  if(!sameOrigin(request)) return NextResponse.json({error:'Nguồn yêu cầu không hợp lệ.'},{status:403});
   const user = await sessionUser(request.cookies.get('teamspirit_session')?.value);
   if (!user) return NextResponse.json({ error: 'Vui lòng đăng nhập.' }, { status: 401 });
   if (user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER') {

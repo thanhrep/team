@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rows, sessionUser } from '../../../../../lib/store';
 import { syncTablesToGoogleSheets } from '../../../../../lib/google-server';
+import { sameOrigin } from '../../../../../lib/request-security';
 
 export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
+  if(!sameOrigin(request)) return NextResponse.json({error:'Nguồn yêu cầu không hợp lệ.'},{status:403});
   const user = await sessionUser(request.cookies.get('teamspirit_session')?.value);
   if (!user || user.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'Chỉ Admin mới được đồng bộ Google Sheets.' }, { status: 403 });
   try {

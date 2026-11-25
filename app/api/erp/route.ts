@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addRow, byId, columns, rows, sessionUser, updateRow } from '../../../lib/store';
+import { sameOrigin } from '../../../lib/request-security';
 
 export const runtime = 'nodejs';
 const cookie = 'teamspirit_session';
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ user: { id:user.id, name:user.name, email:user.email, role:user.role }, month, summary:allowed.includes('finance')?summary:{orders:orders.length,pendingOrders:summary.pendingOrders,month:[],revenue:null,expenses:null,profit:null}, tables:{...safeTables,...(allowed.includes('employees')?{payroll}:{})} });
 }
 export async function POST(request: NextRequest) {
+  if(!sameOrigin(request)) return NextResponse.json({error:'Nguồn yêu cầu không hợp lệ.'},{status:403});
   const user = await sessionUser(request.cookies.get(cookie)?.value);
   if (!user) return NextResponse.json({ error:'Phiên đăng nhập đã hết hạn.' }, { status:401 });
   const body = await request.json();

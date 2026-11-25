@@ -115,6 +115,20 @@ function rowMatches(
   columns: string[],
 ) {
   const keys = identityKeys[table] || ["id"];
+  if (table === "customers") {
+    // A customer name is editable, so it must not be part of the identity.
+    // Prefer the stable contact fields and fall back to the name only for
+    // legacy rows that have neither email nor phone.
+    const identityKey = ["email", "phone", "name"].find(
+      (key) => comparable(row[key]) !== "",
+    );
+    if (!identityKey) return false;
+    const col = columns.indexOf(identityKey);
+    return (
+      col >= 0 &&
+      comparable(row[identityKey]) === comparable(gridRow[col])
+    );
+  }
   return keys.every((key) => {
     const col = columns.indexOf(key);
     return (

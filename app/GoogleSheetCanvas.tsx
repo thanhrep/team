@@ -132,12 +132,52 @@ function makeSnapshot(title: string, rows: Row[]) {
       ),
     ),
   ];
-  const cellData: Record<number, Record<number, { v: string | number }>> = {};
+  const cellData: Record<
+    number,
+    Record<number, { v: string | number; s?: string; custom?: Row }>
+  > = {};
+  const widths = headers.map((header) => {
+    if (
+      [
+        "name",
+        "address",
+        "note",
+        "description",
+        "product",
+        "customer_name",
+      ].includes(header)
+    )
+      return 190;
+    if (
+      [
+        "status",
+        "category",
+        "team",
+        "color",
+        "department",
+        "position",
+      ].includes(header)
+    )
+      return 145;
+    if (["email", "url", "tracking"].includes(header)) return 220;
+    if (
+      [
+        "total_jpy",
+        "sale_jpy",
+        "amount_jpy",
+        "salary_jpy",
+        "estimated_salary",
+      ].includes(header)
+    )
+      return 125;
+    return 112;
+  });
   values.forEach((line, rowIndex) => {
     cellData[rowIndex] = {};
     line.forEach((value, columnIndex) => {
       cellData[rowIndex][columnIndex] = {
         v: value as string | number,
+        s: rowIndex === 0 ? "header" : "body",
         ...(rowIndex
           ? {
               custom: {
@@ -154,7 +194,22 @@ function makeSnapshot(title: string, rows: Row[]) {
     name: title,
     appVersion: "1.0.0",
     locale: "enUS",
-    styles: {},
+    styles: {
+      header: {
+        bg: { rgb: "#174b3a" },
+        cl: { rgb: "#ffffff" },
+        bl: 1,
+        ht: 2,
+        vt: 2,
+        tb: 3,
+        pd: { t: 6, b: 6, l: 8, r: 8 },
+      },
+      body: {
+        vt: 2,
+        tb: 3,
+        pd: { t: 4, b: 4, l: 8, r: 8 },
+      },
+    },
     sheetOrder: ["sheet1"],
     sheets: {
       sheet1: {
@@ -162,6 +217,17 @@ function makeSnapshot(title: string, rows: Row[]) {
         name: title,
         rowCount: Math.max(values.length + 20, 100),
         columnCount: Math.max(headers.length + 5, 26),
+        defaultColumnWidth: 112,
+        defaultRowHeight: 24,
+        columnHeader: { height: 28 },
+        rowHeader: { width: 42 },
+        rowData: { 0: { h: 34 } },
+        columnData: Object.fromEntries(
+          widths.map((width, index) => [index, { w: width }]),
+        ),
+        freeze: { xSplit: 1, ySplit: 1, startRow: 1, startColumn: 1 },
+        showGridlines: 1,
+        gridlinesColor: "#d9e2dc",
         cellData,
       },
     },

@@ -1315,7 +1315,7 @@ function ModuleView({
   module: Module;
   rows: Row[];
   query: string;
-  reload: () => void;
+  reload: (showLoading?: boolean) => Promise<void>;
   user: Row;
 }) {
   const [adding, setAdding] = useState(false);
@@ -1355,7 +1355,7 @@ function ModuleView({
     });
     if (!response.ok)
       setNotice((await response.json()).error || "Không thể lưu thay đổi.");
-    else reload();
+    else await reload(false);
   }
 
   async function add(event: FormEvent<HTMLFormElement>) {
@@ -1379,7 +1379,7 @@ function ModuleView({
       return;
     }
     setAdding(false);
-    reload();
+    await reload(false);
   }
 
   async function upload(event: FormEvent<HTMLFormElement>) {
@@ -1397,7 +1397,7 @@ function ModuleView({
       }
       setNotice("Đã tải ảnh sản phẩm và lưu vào kho sản phẩm.");
       setUploadFormOpen(false);
-      reload();
+      await reload(false);
     } catch {
       setNotice("Không thể kết nối máy chủ để tải ảnh.");
     } finally {
@@ -1411,7 +1411,7 @@ function ModuleView({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "approveUser", id }),
     });
-    reload();
+    await reload(false);
   }
 
   async function remove(id: string) {
@@ -1424,7 +1424,7 @@ function ModuleView({
     const body = await response.json();
     setNotice(response.ok ? "Đã xóa dữ liệu." : body.error || "Không thể xóa.");
     setOpenMenu(null);
-    if (response.ok) reload();
+    if (response.ok) await reload(false);
   }
 
   function exportCsv() {

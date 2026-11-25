@@ -312,9 +312,9 @@ export default function GoogleSheetCanvas({
                     (c) => (c.v != null && c.v !== "") || c.f,
                   )
                 ) {
-                  if (table !== "orders")
+                  if (table === "users" || table === "payroll")
                     throw Error(
-                      "Vui lòng thêm dòng trong phân hệ trước khi sửa.",
+                      "Mục này chỉ chỉnh sửa ở phân hệ quản lý riêng.",
                     );
                   if (Object.values(line).some((c) => c.f))
                     throw Error("Dòng mới chỉ nhận giá trị.");

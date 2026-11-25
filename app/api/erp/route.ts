@@ -34,6 +34,32 @@ const departments: Record<string, string[]> = {
 };
 const readTables = (role: unknown) => departments[String(role)] ?? [];
 const validRoles = Object.keys(departments);
+const requiredAddFields: Record<string, string[]> = {
+  customers: ["name"],
+  products: ["sku", "name", "category"],
+  media: ["name"],
+  orders: ["order_no", "customer_name"],
+  inventory: ["sku", "product", "type", "quantity"],
+  employees: ["code", "name"],
+  attendance: ["employee_id", "work_date"],
+  finance: ["kind", "category", "amount_jpy", "occurred_at"],
+};
+const fieldLabels: Record<string, string> = {
+  name: "Họ tên/Tên",
+  sku: "Mã sản phẩm",
+  category: "Danh mục",
+  order_no: "Mã đơn hàng",
+  customer_name: "Khách hàng",
+  product: "Sản phẩm",
+  type: "Loại",
+  quantity: "Số lượng",
+  code: "Mã nhân viên",
+  employee_id: "Mã nhân viên",
+  work_date: "Ngày làm việc",
+  kind: "Loại thu chi",
+  amount_jpy: "Số tiền",
+  occurred_at: "Ngày phát sinh",
+};
 export async function GET(request: NextRequest) {
   const user = await sessionUser(request.cookies.get(cookie)?.value);
   if (!user)
@@ -239,6 +265,20 @@ export async function POST(request: NextRequest) {
   }
   if (body.action === "add") {
     const data = body.data || {};
+    const required = requiredAddFields[body.table] || [];
+    const missing = required.filter((key) => {
+      const value = data[key];
+      return value === null || value === undefined || String(value).trim() === "";
+    });
+    if (missing.length)
+      return NextResponse.json(
+        {
+          error: `Dòng mới còn thiếu: ${missing
+            .map((key) => fieldLabels[key] || key)
+            .join(", ")}.`,
+        },
+        { status: 400 },
+      );
     const table = body.table;
     if (table === "orders") {
       if (

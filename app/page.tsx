@@ -56,7 +56,7 @@ const modules: { id: Module; label: string; icon: any; group: string }[] = [
     icon: PackageSearch,
     group: "Kinh doanh",
   },
-  { id: "media", label: "Thư viện ảnh", icon: ImageIcon, group: "Kinh doanh" },
+  { id: "media", label: "Kho sản phẩm", icon: ImageIcon, group: "Kinh doanh" },
   {
     id: "orders",
     label: "Đơn đặt may",
@@ -83,7 +83,7 @@ const modules: { id: Module; label: string; icon: any; group: string }[] = [
 const labels: Record<string, string> = {
   customers: "Khách hàng",
   products: "Sản phẩm",
-  media: "Thư viện ảnh",
+  media: "Kho sản phẩm",
   orders: "Đơn đặt may",
   inventory: "Kho hàng",
   employees: "Nhân viên",
@@ -193,6 +193,18 @@ const headers: Record<string, string> = {
   salary_vnd: "Lương cơ bản (VND)",
   commission_vnd: "Hoa hồng (VND)",
 };
+function headerFor(module: Module, key: string) {
+  if (module === "media") {
+    const mediaHeaders: Record<string, string> = {
+      name: "Tên sản phẩm",
+      type: "Loại tệp",
+      category: "Danh mục sản phẩm",
+      url: "Ảnh sản phẩm",
+    };
+    return mediaHeaders[key] || headers[key] || key;
+  }
+  return headers[key] || key;
+}
 const options: Record<string, string[]> = {
   role: ["STAFF", "SALES", "WAREHOUSE", "ACCOUNTING", "MANAGER", "SUPER_ADMIN"],
   kind: ["THU", "CHI"],
@@ -1303,6 +1315,7 @@ function ModuleView({
   user: Row;
 }) {
   const [adding, setAdding] = useState(false);
+  const [uploadFormOpen, setUploadFormOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -1368,18 +1381,24 @@ function ModuleView({
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setUploading(true);
-    const response = await fetch("/api/media/upload", {
-      method: "POST",
-      body: new FormData(event.currentTarget),
-    });
-    const body = await response.json();
-    setUploading(false);
-    if (!response.ok) {
-      setNotice(body.error || "Tải ảnh thất bại.");
-      return;
+    try {
+      const response = await fetch("/api/media/upload", {
+        method: "POST",
+        body: new FormData(event.currentTarget),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        setNotice(body.error || "Tải ảnh thất bại.");
+        return;
+      }
+      setNotice("Đã tải ảnh sản phẩm và lưu vào kho sản phẩm.");
+      setUploadFormOpen(false);
+      reload();
+    } catch {
+      setNotice("Không thể kết nối máy chủ để tải ảnh.");
+    } finally {
+      setUploading(false);
     }
-    setNotice("Đã tải ảnh và lưu vào thư viện.");
-    reload();
   }
 
   async function approve(id: string) {
@@ -1406,7 +1425,7 @@ function ModuleView({
 
   function exportCsv() {
     const csv = [
-      cols.map((key) => headers[key] || key),
+      cols.map((key) => headerFor(module, key)),
       ...shown.map((row) => cols.map((key) => String(row[key] ?? ""))),
     ]
       .map((line) =>
@@ -1432,7 +1451,7 @@ function ModuleView({
           {module === "media" && (
             <button
               className="secondary-btn"
-              onClick={() => setUploading(true)}
+              onClick={() => setUploadFormOpen(true)}
             >
               <ImageIcon size={14} /> Tải ảnh lên
             </button>
@@ -1453,14 +1472,22 @@ function ModuleView({
           </button>
         </div>
       )}
-      {uploading && (
+      {uploadFormOpen && (
         <form className="inline-form media-upload-form" onSubmit={upload}>
           <label>
-            Chọn ảnh
+            Ảnh sản phẩm
             <input name="file" type="file" accept="image/*" required />
           </label>
           <label>
-            Danh mục
+            Tên sản phẩm
+            <input
+              name="product_name"
+              placeholder="Ví dụ: Đầm lụa dáng suông"
+              required
+            />
+          </label>
+          <label>
+            Danh mục sản phẩm
             <input name="category" defaultValue="Sản phẩm" required />
           </label>
           <div>
@@ -1470,7 +1497,7 @@ function ModuleView({
             <button
               type="button"
               className="secondary-btn"
-              onClick={() => setUploading(false)}
+              onClick={() => setUploadFormOpen(false)}
             >
               Hủy
             </button>
@@ -1484,11 +1511,11 @@ function ModuleView({
             .slice(0, 6)
             .map((key) => (
               <label key={key}>
-                {headers[key] || key}
+                {headerFor(module, key)}
                 <input
                   name={key}
                   required={["name", "sku", "order_no", "code"].includes(key)}
-                  placeholder={headers[key] || key}
+                  placeholder={headerFor(module, key)}
                 />
               </label>
             ))}
@@ -1510,7 +1537,7 @@ function ModuleView({
             <tr>
               <th>#</th>
               {cols.map((key) => (
-                <th key={key}>{headers[key] || key}</th>
+                <th key={key}>{headerFor(module, key)}</th>
               ))}
               <th>Thao tác</th>
             </tr>

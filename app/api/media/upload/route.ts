@@ -21,9 +21,15 @@ export async function POST(request: NextRequest) {
     );
   const form = await request.formData();
   const file = form.get("file");
+  const productName = String(form.get("product_name") || "").trim();
   const category = String(form.get("category") || "Sản phẩm").trim();
   if (!(file instanceof File) || file.size === 0)
     return NextResponse.json({ error: "Vui lòng chọn ảnh." }, { status: 400 });
+  if (!productName || productName.length > 255)
+    return NextResponse.json(
+      { error: "Vui lòng nhập tên sản phẩm hợp lệ (tối đa 255 ký tự)." },
+      { status: 400 },
+    );
   if (!file.type.startsWith("image/"))
     return NextResponse.json(
       { error: "Chỉ hỗ trợ tệp hình ảnh." },
@@ -38,7 +44,7 @@ export async function POST(request: NextRequest) {
     const saved = await saveMedia(file);
     const row = {
       id: `med_${crypto.randomUUID()}`,
-      name: file.name,
+      name: productName,
       type: file.type,
       url: saved.url,
       category,

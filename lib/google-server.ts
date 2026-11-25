@@ -4,7 +4,7 @@ import { runtimeConfig } from "./runtime-config";
 const tabs: Record<string, string> = {
   customers: "Khách hàng",
   products: "Sản phẩm",
-  media: "Thư viện ảnh",
+  media: "Kho sản phẩm",
   orders: "Đơn đặt may",
   inventory: "Kho hàng",
   employees: "Nhân viên",
@@ -54,6 +54,12 @@ const labels: Record<string, string> = {
   role: "Vai trò",
   created_at: "Ngày tạo",
 };
+const mediaLabels: Record<string, string> = {
+  name: "Tên sản phẩm",
+  type: "Loại tệp",
+  category: "Danh mục sản phẩm",
+  url: "Ảnh sản phẩm",
+};
 const enumLabels: Record<string, string> = {
   STAFF: "Nhân viên",
   MANAGER: "Quản lý",
@@ -76,6 +82,9 @@ const aliases: Record<string, string> = Object.fromEntries(
     [label, key],
   ]),
 );
+Object.entries(mediaLabels).forEach(([key, label]) => {
+  aliases[label] = key;
+});
 const identityKeys: Record<string, string[]> = {
   customers: ["email", "phone", "name"],
   products: ["sku"],
@@ -89,6 +98,11 @@ const identityKeys: Record<string, string[]> = {
 
 function keyForHeader(header: string) {
   return aliases[String(header).trim()] || String(header).trim();
+}
+function labelFor(table: string, key: string) {
+  return table === "media"
+    ? mediaLabels[key] || labels[key] || key
+    : labels[key] || key;
 }
 function comparable(value: unknown) {
   const text = String(value ?? "").trim();
@@ -170,11 +184,16 @@ export async function syncTablesToGoogleSheets(
     const keys = Object.keys(rows[0]).filter(
       (k) => k !== "password_hash" && k !== "created_at",
     );
-    const headers = grid[0] || keys.map((k) => labels[k] || k);
+    const rawHeaders = grid[0] || keys.map((k) => labelFor(table, k));
+    const headers = rawHeaders.map((header) =>
+      table === "media" && keyForHeader(header) === "name"
+        ? mediaLabels.name
+        : header,
+    );
     const columns = headers.map(keyForHeader);
     if (new Set(columns).size !== columns.length)
       throw Error("Trùng tiêu đề trên " + tabs[table]);
-    if (!grid.length)
+    if (!grid.length || (table === "media" && rawHeaders[0] !== headers[0]))
       await sheets.spreadsheets.values.update({
         ...params,
         range: range + "A1",

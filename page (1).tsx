@@ -1,0 +1,2 @@
+import {redirect} from "next/navigation";import {currentUser} from "@/lib/auth";import AIChat from "@/components/AIChat";
+export default async function AIPage(){if(!await currentUser())redirect("/login");return <main className="p-6 md:p-10"><a href="/dashboard" className="text-sm text-blue-800">← Tổng quan</a><h1 className="text-3xl font-bold mt-3">Trợ lý AI báo cáo</h1><p className="text-gray-500 mt-1">Module tùy chọn. Mặc định tắt; khi bật, yêu cầu được gửi tới Ollama trên máy chủ.</p><AIChat/></main>}

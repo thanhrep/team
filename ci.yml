@@ -1,0 +1,33 @@
+name: BIZWORK CI
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_USER: bizwork, POSTGRES_PASSWORD: bizwork, POSTGRES_DB: bizwork}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U bizwork -d bizwork"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: npm install
+      - run: npx prisma validate
+        env: {DATABASE_URL: postgresql://bizwork:bizwork@localhost:5432/bizwork}
+      - run: npx prisma generate
+        env: {DATABASE_URL: postgresql://bizwork:bizwork@localhost:5432/bizwork}
+      - run: npm run test
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          DATABASE_URL: postgresql://bizwork:bizwork@localhost:5432/bizwork
+          AUTH_SECRET: ci-only-secret-value-that-is-long-enough-123456

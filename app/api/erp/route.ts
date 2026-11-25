@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { addRow, byId, columns, rows, sessionUser, updateRow } from '../../../lib/store';
+import { addRow, byId, columns, deleteRow, rows, sessionUser, updateRow } from '../../../lib/store';
+import { removeMedia } from '../../../lib/media-server';
 import { sameOrigin } from '../../../lib/request-security';
 
 export const runtime = 'nodejs';
@@ -48,6 +49,15 @@ export async function POST(request: NextRequest) {
     if (!current) return NextResponse.json({error:'Không tìm thấy tài khoản.'},{status:404});
     if (!(await updateRow('users',String(body.id),{status:current.status,role:current.role},{status:'APPROVED',role:body.role||'STAFF'}))) return NextResponse.json({error:'Tài khoản đã được thay đổi.'},{status:409});
     return NextResponse.json({ ok:true });
+  }
+  if (body.action === 'delete') {
+    if (!['SUPER_ADMIN', 'MANAGER', 'SALES'].includes(String(user.role))) return NextResponse.json({ error: 'Bạn không có quyền xóa dữ liệu.' }, { status: 403 });
+    if (!readTables(user.role).includes(body.table) || body.table === 'users') return NextResponse.json({ error: 'Không có quyền xóa danh mục này.' }, { status: 403 });
+    const current = await byId(body.table, String(body.id));
+    if (!current) return NextResponse.json({ error: 'Không tìm thấy dòng dữ liệu.' }, { status: 404 });
+    if (body.table === 'media') await removeMedia(String(current.url || ''));
+    await deleteRow(body.table, String(body.id));
+    return NextResponse.json({ ok: true });
   }
   if (!readTables(user.role).includes(body.table) || (user.role==='STAFF') || (user.role==='WAREHOUSE' && body.table==='orders') || (user.role==='SALES' && body.table==='products')) return NextResponse.json({error:'Không có quyền ghi danh mục này.'},{status:403});
   const fields = body.action==='update'?body.changes:body.data;

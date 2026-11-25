@@ -44,6 +44,17 @@ export async function addRow(table: string, row: Row) {
   check(error);
 }
 
+export async function deleteRow(table: string, id: string) {
+  if (!columns[table]) throw new Error('Danh mục không hợp lệ.');
+  const supabase = client();
+  if (!supabase) {
+    db.prepare(`DELETE FROM ${table} WHERE id=?`).run(id);
+    return;
+  }
+  const { error } = await supabase.from('erp_records').delete().eq('table_name', table).eq('id', id);
+  check(error);
+}
+
 export async function updateRow(table: string, id: string, expected: Row, changes: Row): Promise<boolean> {
   if (!columns[table]) throw new Error('Danh mục không hợp lệ.');
   if (Object.keys(changes).some(key=>!Object.hasOwn(expected,key))) return false;

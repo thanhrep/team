@@ -36,7 +36,8 @@ const layouts: Record<string, string[]> = {
     "name",
     "department",
     "position",
-    "salary_jpy",
+    "salary_vnd",
+    "commission_vnd",
     "phone",
     "status",
   ],
@@ -53,7 +54,8 @@ const layouts: Record<string, string[]> = {
     "name",
     "department",
     "work_days",
-    "salary_jpy",
+    "salary_vnd",
+    "commission_vnd",
     "estimated_salary",
     "status",
   ],
@@ -88,8 +90,10 @@ const columnLabels: Record<string, string> = {
   code: "Mã nhân viên",
   department: "Phòng ban",
   position: "Vị trí",
-  salary_jpy: "Lương cơ bản (¥)",
-  estimated_salary: "Lương dự kiến (¥)",
+  salary_jpy: "Lương cũ (¥)",
+  salary_vnd: "Lương cơ bản (VND)",
+  commission_vnd: "Hoa hồng (VND)",
+  estimated_salary: "Tổng lương dự kiến (VND)",
   work_days: "Ngày công",
   employee_id: "Mã nhân viên",
   work_date: "Ngày làm việc",
@@ -154,9 +158,9 @@ const sheetProfiles: Record<string, SheetProfile> = {
     wrap: ["product", "note"],
   },
   "Nhân viên": {
-    widths: [125, 180, 150, 145, 140, 150, 125],
+    widths: [125, 180, 150, 145, 145, 145, 150, 125],
     center: ["department", "position", "status"],
-    numeric: ["salary_jpy"],
+    numeric: ["salary_vnd", "commission_vnd"],
     wrap: ["name"],
   },
   "Chấm công": {
@@ -165,9 +169,9 @@ const sheetProfiles: Record<string, SheetProfile> = {
     wrap: ["note"],
   },
   "Tính lương": {
-    widths: [125, 180, 150, 105, 140, 155, 125],
+    widths: [125, 180, 150, 105, 145, 145, 165, 125],
     center: ["department", "status"],
-    numeric: ["work_days", "salary_jpy", "estimated_salary"],
+    numeric: ["work_days", "salary_vnd", "commission_vnd", "estimated_salary"],
     wrap: ["name"],
   },
   "Thu chi": {
@@ -390,12 +394,11 @@ export default function GoogleSheetCanvas({
               const sourceId = Object.values(line).find(
                 (cell) => cell.custom?.recordId,
               )?.custom.recordId;
-              const copied = sourceId && rows[Number(n) - 1]?.id !== sourceId;
-              if (copied && Number(n) <= rows.length)
-                throw Error(
-                  "Dòng đã đổi vị trí. Tải lại bảng để tránh sửa nhầm đơn.",
-                );
-              const id = addedRows.get(n) ?? (copied ? undefined : sourceId);
+              // The cell's recordId is the source of truth. Do not compare it
+              // with the current array index: a normal Sheets sort or a
+              // background refresh can change row order without changing the
+              // record being edited.
+              const id = addedRows.get(n) ?? sourceId;
               const original = originals.get(id);
               if (!original) {
                 if (
@@ -512,11 +515,11 @@ export default function GoogleSheetCanvas({
         };
         const scheduleAutoSave = () => {
           dirty = true;
-          setStatus("Đã nhận thay đổi. Tự động lưu sau 1,2 giây…");
+          setStatus("Đã nhận thay đổi · đang tự động lưu…");
           if (autoSaveTimer) clearTimeout(autoSaveTimer);
           autoSaveTimer = setTimeout(() => {
             void saveChanges().catch(() => undefined);
-          }, 1200);
+          }, 500);
         };
         commandSubscription = (result.univerAPI as any).addEvent(
           (result.univerAPI as any).Event.CommandExecuted,

@@ -123,7 +123,6 @@ const columns: Record<string, string[]> = {
     "name",
     "department",
     "position",
-    "salary_jpy",
     "salary_vnd",
     "commission_vnd",
     "phone",
@@ -142,7 +141,8 @@ const columns: Record<string, string[]> = {
     "name",
     "department",
     "work_days",
-    "salary_jpy",
+    "salary_vnd",
+    "commission_vnd",
     "estimated_salary",
     "status",
   ],
@@ -177,8 +177,10 @@ const headers: Record<string, string> = {
   code: "Mã NV",
   department: "Phòng ban",
   position: "Vị trí",
-  salary_jpy: "Lương cơ bản (¥)",
-  estimated_salary: "Lương dự kiến (¥)",
+  salary_jpy: "Lương cũ (¥)",
+  salary_vnd: "Lương cơ bản (VND)",
+  commission_vnd: "Hoa hồng (VND)",
+  estimated_salary: "Tổng lương dự kiến (VND)",
   work_days: "Ngày công",
   employee_id: "Mã nhân viên",
   work_date: "Ngày",
@@ -190,8 +192,6 @@ const headers: Record<string, string> = {
   occurred_at: "Ngày phát sinh",
   role: "Vai trò",
   created_at: "Ngày tạo",
-  salary_vnd: "Lương cơ bản (VND)",
-  commission_vnd: "Hoa hồng (VND)",
 };
 function headerFor(module: Module, key: string) {
   if (module === "media") {
@@ -232,6 +232,18 @@ function yen(value: any) {
     currency: "JPY",
     maximumFractionDigits: 0,
   }).format(Number(value || 0));
+}
+function vnd(value: any) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+function formatMoney(key: string, value: any) {
+  return key.endsWith("_vnd") || key === "estimated_salary"
+    ? vnd(value)
+    : yen(value);
 }
 function Status({ text }: { text: string }) {
   return (
@@ -750,7 +762,7 @@ function EditableCell({
     keyName === "status" ? statusOptions[rowStatus] || [] : options[keyName];
   if (readOnly)
     return (
-      <span>{moneyKeys.includes(keyName) ? yen(value) : value || "—"}</span>
+      <span>{moneyKeys.includes(keyName) ? formatMoney(keyName, value) : value || "—"}</span>
     );
   if (choices)
     return (
@@ -1702,7 +1714,7 @@ function Payroll({ rows }: { rows: Row[] }) {
         />
         <Metric
           label="Tổng lương dự kiến"
-          value={yen(total)}
+          value={vnd(total)}
           delta="Chưa chốt"
         />
       </div>

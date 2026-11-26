@@ -43,9 +43,11 @@ const labels: Record<string, string> = {
   code: "Mã nhân viên",
   department: "Phòng ban",
   position: "Vị trí",
-  salary_jpy: "Lương cơ bản (¥)",
+  salary_jpy: "Lương cũ (¥)",
+  salary_vnd: "Lương cơ bản (VND)",
+  commission_vnd: "Hoa hồng (VND)",
   work_days: "Ngày công",
-  estimated_salary: "Lương tạm tính (¥)",
+  estimated_salary: "Tổng lương dự kiến (VND)",
   employee_id: "Mã nhân viên",
   work_date: "Ngày làm việc",
   time_in: "Giờ vào",
@@ -88,6 +90,9 @@ const aliases: Record<string, string> = Object.fromEntries(
 Object.entries(mediaLabels).forEach(([key, label]) => {
   aliases[label] = key;
 });
+// Migrate the old payroll headers to VND when formatting an existing Sheet.
+aliases["Lương cơ bản (¥)"] = "salary_vnd";
+aliases["Lương dự kiến (¥)"] = "estimated_salary";
 const identityKeys: Record<string, string[]> = {
   customers: ["email", "phone", "name"],
   products: ["sku"],
@@ -109,9 +114,9 @@ const sheetFieldOrder: Record<string, string[]> = {
     "id", "order_no", "customer_name", "team", "product", "size", "quantity", "total_jpy", "status", "tracking",
   ],
   inventory: ["id", "sku", "product", "type", "quantity", "warehouse", "note"],
-  employees: ["id", "code", "name", "department", "position", "salary_jpy", "phone", "status"],
+  employees: ["id", "code", "name", "department", "position", "salary_vnd", "commission_vnd", "phone", "status"],
   attendance: ["id", "employee_id", "work_date", "status", "time_in", "time_out", "note"],
-  payroll: ["code", "name", "department", "work_days", "salary_jpy", "estimated_salary", "status"],
+  payroll: ["code", "name", "department", "work_days", "salary_vnd", "commission_vnd", "estimated_salary", "status"],
   finance: ["id", "kind", "category", "amount_jpy", "description", "occurred_at"],
   users: ["id", "name", "email", "role", "status", "created_at"],
 };
@@ -122,9 +127,9 @@ const sheetFormatProfiles: Record<string, { widths: number[]; wrap: string[] }> 
   media: { widths: [125, 220, 125, 180, 260], wrap: ["name", "url"] },
   orders: { widths: [125, 150, 180, 150, 190, 85, 90, 130, 125, 170], wrap: ["customer_name", "product"] },
   inventory: { widths: [125, 130, 190, 125, 100, 150, 220], wrap: ["product", "note"] },
-  employees: { widths: [125, 125, 180, 150, 145, 140, 150, 125], wrap: ["name"] },
+  employees: { widths: [125, 125, 180, 150, 145, 145, 145, 150, 125], wrap: ["name"] },
   attendance: { widths: [125, 135, 125, 125, 105, 105, 240], wrap: ["note"] },
-  payroll: { widths: [125, 180, 150, 105, 140, 155, 125], wrap: ["name"] },
+  payroll: { widths: [125, 180, 150, 105, 145, 145, 165, 125], wrap: ["name"] },
   finance: { widths: [125, 125, 150, 140, 260, 145], wrap: ["description"] },
   users: { widths: [125, 180, 240, 140, 125, 145], wrap: ["name"] },
 };

@@ -72,11 +72,23 @@ CREATE TABLE IF NOT EXISTS customers (id TEXT PRIMARY KEY, name TEXT NOT NULL, p
 CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY, sku TEXT UNIQUE NOT NULL, name TEXT NOT NULL, category TEXT NOT NULL, team TEXT, season TEXT, color TEXT, cost_jpy REAL DEFAULT 0, sale_jpy REAL DEFAULT 0, stock INTEGER DEFAULT 0, status TEXT DEFAULT 'ACTIVE', image_url TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, order_no TEXT UNIQUE NOT NULL, customer_name TEXT NOT NULL, team TEXT, product TEXT, size TEXT, quantity INTEGER DEFAULT 1, total_jpy REAL DEFAULT 0, status TEXT DEFAULT 'MỚI', tracking TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS inventory (id TEXT PRIMARY KEY, sku TEXT NOT NULL, product TEXT NOT NULL, type TEXT NOT NULL, quantity INTEGER NOT NULL, warehouse TEXT DEFAULT 'Kho chính', note TEXT, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS employees (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, name TEXT NOT NULL, department TEXT, position TEXT, salary_jpy REAL DEFAULT 0, phone TEXT, status TEXT DEFAULT 'Đang làm');
+CREATE TABLE IF NOT EXISTS employees (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, name TEXT NOT NULL, department TEXT, position TEXT, salary_jpy REAL DEFAULT 0, salary_vnd REAL DEFAULT 0, commission_vnd REAL DEFAULT 0, phone TEXT, status TEXT DEFAULT 'Đang làm');
 CREATE TABLE IF NOT EXISTS attendance (id TEXT PRIMARY KEY, employee_id TEXT NOT NULL, work_date TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Đi làm', time_in TEXT, time_out TEXT, note TEXT);
 CREATE TABLE IF NOT EXISTS finance (id TEXT PRIMARY KEY, kind TEXT NOT NULL, category TEXT NOT NULL, amount_jpy REAL NOT NULL, description TEXT, occurred_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT, url TEXT, category TEXT, created_at TEXT NOT NULL);
 `);
+
+// Keep existing installations compatible while moving payroll to VND.
+const employeeColumns = db
+  .prepare("PRAGMA table_info(employees)")
+  .all() as Array<{ name?: string }>;
+if (!employeeColumns.some((column) => column.name === "salary_vnd"))
+  db.exec("ALTER TABLE employees ADD COLUMN salary_vnd REAL DEFAULT 0");
+if (!employeeColumns.some((column) => column.name === "commission_vnd"))
+  db.exec("ALTER TABLE employees ADD COLUMN commission_vnd REAL DEFAULT 0");
+db.exec(
+  "UPDATE employees SET salary_vnd = salary_jpy WHERE COALESCE(salary_vnd, 0) = 0 AND COALESCE(salary_jpy, 0) <> 0",
+);
 
 if (!isBuild) {
   const bootstrapPassword = process.env.TEAMSPIRIT_ADMIN_PASSWORD;

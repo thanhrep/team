@@ -88,11 +88,15 @@ export async function GET(request: NextRequest) {
         )
         .map((row) => row.work_date),
     ).size;
+    const salaryVnd = Number(employee.salary_vnd || employee.salary_jpy || 0);
+    const commissionVnd = Number(employee.commission_vnd || 0);
     return {
       ...employee,
+      salary_vnd: salaryVnd,
+      commission_vnd: commissionVnd,
       work_days: days,
       estimated_salary: Math.round(
-        (Number(employee.salary_jpy || 0) * days) / 22,
+        (salaryVnd * days) / 24 + commissionVnd,
       ),
     };
   });

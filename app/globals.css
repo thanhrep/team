@@ -1087,6 +1087,19 @@ tr:hover td {
   align-items: center;
   white-space: nowrap;
 }
+.sheet-auto-save-badge {
+  display: inline-flex !important;
+  align-items: center;
+  border: 1px solid #c6e2d2;
+  border-radius: 999px;
+  padding: 7px 11px;
+  margin-top: 0 !important;
+  background: #edf8f1;
+  color: #176044 !important;
+  font-size: 11px !important;
+  font-weight: 600;
+  white-space: nowrap;
+}
 .sheet-sync-status {
   margin: 0;
   padding: 7px 16px;

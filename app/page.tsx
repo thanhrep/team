@@ -644,18 +644,30 @@ function SheetWorkspace({
     "users",
   ];
   async function sync(changes: Record<string, Row>) {
-    const response = await fetch("/api/integrations/google/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ table: sheet, changes }),
-    });
-    const body = await response.json();
-    if (!response.ok)
-      throw new Error(body.error || "Đồng bộ Google Sheets thất bại.");
-    // The ERP write and the Google Sheets sync are complete. Refresh the
-    // in-memory table without showing the full-page loading screen so that
-    // switching tabs cannot restore stale rows from the previous snapshot.
-    await reload(false);
+    let syncError: Error | null = null;
+    try {
+      const response = await fetch("/api/integrations/google/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ table: sheet, changes }),
+      });
+      const body = await response.json();
+      if (!response.ok)
+        syncError = new Error(
+          body.error || "Đồng bộ Google Sheets thất bại.",
+        );
+    } catch (error) {
+      syncError =
+        error instanceof Error
+          ? error
+          : new Error("Đồng bộ Google Sheets thất bại.");
+    } finally {
+      // Keep the active Univer workbook mounted. Re-fetching all tables here
+      // rebuilt the editor after every cell edit and looked like a page reload.
+      // The canvas already updates its local row identity after each ERP write;
+      // the next navigation or explicit refresh will fetch the latest tables.
+    }
+    if (syncError) throw syncError;
   }
   return (
     <div className="sheet-workspace">

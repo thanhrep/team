@@ -247,11 +247,14 @@ export default function GoogleSheetCanvas({
 }) {
   const host = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState("Đang khởi tạo trình soạn thảo…");
-  const syncRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     let alive = true;
     let instance: { dispose: () => void } | null = null;
+    let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryDelay = 3000;
+    let retryAfter: number | null = null;
+    let commandSubscription: { dispose: () => void } | null = null;
     (async () => {
       try {
         const [
@@ -284,9 +287,16 @@ export default function GoogleSheetCanvas({
         const pending = new Map<string, Row>();
         const addedRows = new Map<string, string>();
         let saving = false;
-        syncRef.current = async () => {
-          if (saving) return;
+        let dirty = false;
+
+        const saveChanges = async (force = false) => {
+          if (saving) {
+            dirty = true;
+            return;
+          }
+          if (!dirty && !force) return;
           saving = true;
+          dirty = false;
           try {
             await workbook.endEditingAsync(true);
             const cells = workbook.save().sheets.sheet1.cellData;
@@ -382,24 +392,64 @@ export default function GoogleSheetCanvas({
               pending.set(id, { ...expected, ...pending.get(id) });
             }
             if (!pending.size) {
-              setStatus("Không có thay đổi cần lưu.");
+              setStatus(force ? "Không có thay đổi cần lưu." : "Đã tự lưu ERP.");
               return;
             }
             setStatus("Đã lưu ERP. Đang gửi sang Google Sheets…");
             try {
               await onSync(Object.fromEntries(pending));
               pending.clear();
+              retryDelay = 3000;
               setStatus("Đã lưu ERP và Google Sheets.");
             } catch {
+              dirty = true;
               setStatus(
-                "Đã lưu ERP. Google Sheets chưa đồng bộ. Có thể bấm lại để thử.",
+                "Đã lưu ERP. Đang chờ đồng bộ Google Sheets; hệ thống sẽ tự thử lại.",
               );
+              retryAfter = retryDelay;
+              retryDelay = Math.min(retryDelay * 2, 60000);
             }
+          } catch (error) {
+            dirty = true;
+            setStatus(
+              `Tự động lưu chưa hoàn tất: ${
+                error instanceof Error ? error.message : "lỗi không xác định"
+              }. Hệ thống sẽ tự thử lại.`,
+            );
+            throw error;
           } finally {
             saving = false;
+            if (dirty && alive) {
+              if (autoSaveTimer) clearTimeout(autoSaveTimer);
+              const delay = retryAfter ?? 1500;
+              retryAfter = null;
+              autoSaveTimer = setTimeout(() => {
+                void saveChanges().catch(() => undefined);
+              }, delay);
+            }
           }
         };
-        setStatus("Đã tải bảng tính");
+        const scheduleAutoSave = () => {
+          dirty = true;
+          setStatus("Đã nhận thay đổi. Tự động lưu sau 1,2 giây…");
+          if (autoSaveTimer) clearTimeout(autoSaveTimer);
+          autoSaveTimer = setTimeout(() => {
+            void saveChanges().catch(() => undefined);
+          }, 1200);
+        };
+        commandSubscription = (result.univerAPI as any).addEvent(
+          (result.univerAPI as any).Event.CommandExecuted,
+          (event: { id?: string }) => {
+            const id = String(event?.id || "");
+            if (
+              /set[-_].*(value|range|cell)|paste|delete[-_].*(range|row|column)|insert[-_].*(range|row|column)|remove[-_].*(range|row|column)|move[-_].*(range|row|column)|sort|clear/i.test(
+                id,
+              )
+            )
+              scheduleAutoSave();
+          },
+        );
+        setStatus("Đã tải bảng tính · tự động lưu và đồng bộ đang bật");
       } catch (error) {
         setStatus(
           error instanceof Error
@@ -410,7 +460,8 @@ export default function GoogleSheetCanvas({
     })();
     return () => {
       alive = false;
-      syncRef.current = null;
+      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      commandSubscription?.dispose();
       if (instance) instance.dispose();
     };
   }, [title, table, rows, onSync]);
@@ -422,20 +473,7 @@ export default function GoogleSheetCanvas({
           <b>{title}</b>
           <span>Giao diện bảng tính · dữ liệu từ TEAMSPIRIT ERP</span>
         </div>
-        <button
-          className="primary-btn"
-          onClick={() =>
-            syncRef
-              .current?.()
-              .catch((error) =>
-                setStatus(
-                  error instanceof Error ? error.message : "Đồng bộ thất bại.",
-                ),
-              )
-          }
-        >
-          Lưu & đồng bộ Google Sheets
-        </button>
+        <span className="sheet-auto-save-badge">Tự động lưu · Google Sheets</span>
       </div>
       <p className="sheet-sync-status">{status}</p>
       <div ref={host} className="google-sheet-canvas" />

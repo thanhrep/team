@@ -115,6 +115,74 @@ const valueLabels: Record<string, string> = {
   "Đang MAY": "Đang may",
 };
 
+type SheetProfile = {
+  widths: number[];
+  center?: string[];
+  numeric?: string[];
+  wrap?: string[];
+};
+
+// Shared visual rules for the web workbook. The same widths and field groups
+// are also used by the Google Sheets formatter on the server.
+const sheetProfiles: Record<string, SheetProfile> = {
+  "Khách hàng": {
+    widths: [155, 145, 220, 120, 145, 220],
+    center: ["country"],
+    wrap: ["name", "address", "note"],
+  },
+  "Sản phẩm": {
+    widths: [130, 190, 150, 155, 105, 120, 125, 95, 125],
+    center: ["category", "team", "season", "color", "status"],
+    numeric: ["sale_jpy", "stock"],
+    wrap: ["name"],
+  },
+  "Kho sản phẩm": {
+    widths: [220, 120, 180, 250],
+    center: ["type", "category"],
+    wrap: ["name", "url"],
+  },
+  "Đơn đặt may": {
+    widths: [150, 180, 150, 190, 85, 90, 130, 125, 170],
+    center: ["team", "size", "status"],
+    numeric: ["quantity", "total_jpy"],
+    wrap: ["customer_name", "product"],
+  },
+  "Kho hàng": {
+    widths: [130, 190, 125, 100, 150, 220],
+    center: ["type", "warehouse"],
+    numeric: ["quantity"],
+    wrap: ["product", "note"],
+  },
+  "Nhân viên": {
+    widths: [125, 180, 150, 145, 140, 150, 125],
+    center: ["department", "position", "status"],
+    numeric: ["salary_jpy"],
+    wrap: ["name"],
+  },
+  "Chấm công": {
+    widths: [135, 125, 125, 105, 105, 240],
+    center: ["employee_id", "work_date", "status", "time_in", "time_out"],
+    wrap: ["note"],
+  },
+  "Tính lương": {
+    widths: [125, 180, 150, 105, 140, 155, 125],
+    center: ["department", "status"],
+    numeric: ["work_days", "salary_jpy", "estimated_salary"],
+    wrap: ["name"],
+  },
+  "Thu chi": {
+    widths: [125, 150, 140, 260, 145],
+    center: ["kind", "category", "occurred_at"],
+    numeric: ["amount_jpy"],
+    wrap: ["description"],
+  },
+  "Tài khoản": {
+    widths: [180, 240, 140, 125, 145],
+    center: ["role", "status", "created_at"],
+    wrap: ["name"],
+  },
+};
+
 function makeSnapshot(title: string, rows: Row[]) {
   const headers =
     layouts[title] ||
@@ -136,48 +204,28 @@ function makeSnapshot(title: string, rows: Row[]) {
     number,
     Record<number, { v: string | number; s?: string; custom?: Row }>
   > = {};
-  const widths = headers.map((header) => {
-    if (
-      [
-        "name",
-        "address",
-        "note",
-        "description",
-        "product",
-        "customer_name",
-      ].includes(header)
-    )
-      return 190;
-    if (
-      [
-        "status",
-        "category",
-        "team",
-        "color",
-        "department",
-        "position",
-      ].includes(header)
-    )
-      return 145;
-    if (["email", "url", "tracking"].includes(header)) return 220;
-    if (
-      [
-        "total_jpy",
-        "sale_jpy",
-        "amount_jpy",
-        "salary_jpy",
-        "estimated_salary",
-      ].includes(header)
-    )
-      return 125;
-    return 112;
+  const profile = sheetProfiles[title] || { widths: [] };
+  const widths = headers.map((header, index) => {
+    if (profile.widths[index]) return profile.widths[index];
+    if (profile.wrap?.includes(header)) return 190;
+    if (profile.numeric?.includes(header)) return 125;
+    return 120;
   });
   values.forEach((line, rowIndex) => {
     cellData[rowIndex] = {};
     line.forEach((value, columnIndex) => {
       cellData[rowIndex][columnIndex] = {
         v: value as string | number,
-        s: rowIndex === 0 ? "header" : "body",
+        s:
+          rowIndex === 0
+            ? "header"
+            : profile.numeric?.includes(headers[columnIndex])
+              ? "number"
+              : profile.center?.includes(headers[columnIndex])
+                ? "center"
+                : profile.wrap?.includes(headers[columnIndex])
+                  ? "wrap"
+                  : "body",
         ...(rowIndex
           ? {
               custom: {
@@ -193,21 +241,48 @@ function makeSnapshot(title: string, rows: Row[]) {
     id: `teamspirit-${Date.now()}`,
     name: title,
     appVersion: "1.0.0",
-    locale: "enUS",
+    locale: "viVN",
     styles: {
       header: {
+        ff: "Arial",
+        fs: 10,
         bg: { rgb: "#174b3a" },
         cl: { rgb: "#ffffff" },
         bl: 1,
         ht: 2,
         vt: 2,
         tb: 3,
-        pd: { t: 6, b: 6, l: 8, r: 8 },
+        pd: { t: 7, b: 7, l: 9, r: 9 },
       },
       body: {
+        ff: "Arial",
+        fs: 10,
         vt: 2,
         tb: 3,
-        pd: { t: 4, b: 4, l: 8, r: 8 },
+        pd: { t: 5, b: 5, l: 9, r: 9 },
+      },
+      number: {
+        ff: "Arial",
+        fs: 10,
+        ht: 3,
+        vt: 2,
+        tb: 3,
+        pd: { t: 5, b: 5, l: 9, r: 9 },
+      },
+      center: {
+        ff: "Arial",
+        fs: 10,
+        ht: 2,
+        vt: 2,
+        tb: 3,
+        pd: { t: 5, b: 5, l: 9, r: 9 },
+      },
+      wrap: {
+        ff: "Arial",
+        fs: 10,
+        vt: 2,
+        tb: 2,
+        pd: { t: 5, b: 5, l: 9, r: 9 },
       },
     },
     sheetOrder: ["sheet1"],
@@ -217,11 +292,17 @@ function makeSnapshot(title: string, rows: Row[]) {
         name: title,
         rowCount: Math.max(values.length + 20, 100),
         columnCount: Math.max(headers.length + 5, 26),
-        defaultColumnWidth: 112,
-        defaultRowHeight: 24,
-        columnHeader: { height: 28 },
-        rowHeader: { width: 42 },
-        rowData: { 0: { h: 34 } },
+        defaultColumnWidth: 120,
+        defaultRowHeight: 27,
+        columnHeader: { height: 30 },
+        rowHeader: { width: 46 },
+        rowData: Object.fromEntries([
+          [0, { h: 36 }],
+          ...Array.from({ length: values.length - 1 }, (_, index) => [
+            index + 1,
+            { h: 28 },
+          ]),
+        ]),
         columnData: Object.fromEntries(
           widths.map((width, index) => [index, { w: width }]),
         ),

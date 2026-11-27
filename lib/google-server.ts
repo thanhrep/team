@@ -438,33 +438,39 @@ export async function syncTablesToGoogleSheets(
     throw new Error("Chưa cấu hình Google Sheets API.");
   const sheets = await getSpreadsheet(auth);
   const counts: Record<string, number> = {};
+  const spreadsheetId = runtimeConfig.googleSheetId;
+  let meta = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets.properties.title",
+  });
+  const existingTitles = new Set(
+    (meta.data.sheets || [])
+      .map((sheet) => sheet.properties?.title)
+      .filter((title): title is string => Boolean(title)),
+  );
+  const missingTables = Object.entries(tables).filter(
+    ([table, rows]) => rows.length > 0 && tabs[table] && !existingTitles.has(tabs[table]),
+  );
+  if (missingTables.length) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: missingTables.map(([table]) => ({
+          addSheet: {
+            properties: {
+              title: tabs[table],
+              gridProperties: { frozenRowCount: 1, frozenColumnCount: 1 },
+            },
+          },
+        })),
+      },
+    });
+    missingTables.forEach(([table]) => existingTitles.add(tabs[table]));
+  }
   for (const [table, rows] of Object.entries(tables)) {
     if (!rows.length || !tabs[table]) continue;
     const range = "'" + tabs[table] + "'!";
-    const meta = await sheets.spreadsheets.get({
-      spreadsheetId: runtimeConfig.googleSheetId,
-      fields: "sheets.properties.title",
-    });
-    const exists = meta.data.sheets?.some(
-      (s) => s.properties?.title === tabs[table],
-    );
-    if (!exists)
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: runtimeConfig.googleSheetId,
-        requestBody: {
-          requests: [
-            {
-              addSheet: {
-                properties: {
-                  title: tabs[table],
-                  gridProperties: { frozenRowCount: 1 },
-                },
-              },
-            },
-          ],
-        },
-      });
-    const params = { spreadsheetId: runtimeConfig.googleSheetId };
+    const params = { spreadsheetId };
     const grid =
       (
         await sheets.spreadsheets.values.get({
@@ -536,21 +542,6 @@ export async function syncTablesToGoogleSheets(
           ...params,
           requestBody: { valueInputOption: "RAW", data: changes },
         });
-      const formattedMeta = await sheets.spreadsheets.get({
-        spreadsheetId: runtimeConfig.googleSheetId,
-        fields: "sheets.properties",
-      });
-      const currentSheet = formattedMeta.data.sheets?.find(
-        (sheet) => sheet.properties?.title === tabs[table],
-      );
-      if (currentSheet) {
-        await formatGoogleSheet(
-          sheets,
-          runtimeConfig.googleSheetId,
-          currentSheet,
-          table,
-        );
-      }
     }
     counts[table] = rows.length;
   }

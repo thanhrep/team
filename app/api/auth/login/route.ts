@@ -5,7 +5,7 @@ import { loginAllowed, loginFailed, loginSucceeded, sameOrigin } from '../../../
 export const runtime='nodejs';
 export async function POST(request:NextRequest){
   if(!sameOrigin(request)) return NextResponse.json({error:'Nguồn yêu cầu không hợp lệ.'},{status:403});
-  const {email,password}=await request.json();
+  const {email,password}=await request.json() as { email?: unknown; password?: unknown };
   const address=String(email||'').trim().toLowerCase();
   const ip=request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()||'local';
   const key=`${ip}:${address}`;

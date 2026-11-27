@@ -422,7 +422,7 @@ export default function GoogleSheetCanvas({
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ action: "add", table, data }),
                   });
-                  const saved = await response.json();
+                  const saved = (await response.json()) as Record<string, any>;
                   if (!response.ok)
                     throw Error(
                       "Dòng " +
@@ -471,7 +471,7 @@ export default function GoogleSheetCanvas({
                 }),
               });
               if (!response.ok)
-                throw Error((await response.json()).error || "Lưu thất bại.");
+                throw Error(((await response.json()) as Record<string, any>).error || "Lưu thất bại.");
               Object.assign(original, changes);
               pending.set(id, { ...expected, ...pending.get(id) });
             }

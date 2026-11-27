@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
       { error: "Phiên đăng nhập đã hết hạn." },
       { status: 401 },
     );
-  const body = await request.json();
+  const body = await request.json() as Record<string, any>;
   if (body.action === "approveUser") {
     if (user.role !== "SUPER_ADMIN")
       return NextResponse.json(

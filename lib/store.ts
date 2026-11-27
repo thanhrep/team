@@ -1,15 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import {
-  all,
-  createSession,
-  createUser,
-  db,
-  getUserByEmail,
-  insert,
-  type Row,
-  update,
-  userFromToken,
-} from "./sqlite";
+import type { Row } from "./sqlite";
 import { getSupabaseAdmin } from "./supabase-server";
 
 export const columns: Record<string, string[]> = {
@@ -108,6 +98,9 @@ function client() {
 function check(error: { message: string } | null) {
   if (error) throw new Error(error.message);
 }
+async function localStore() {
+  return import("./sqlite");
+}
 export function cloudEnabled() {
   return Boolean(client());
 }
@@ -115,7 +108,7 @@ export function cloudEnabled() {
 export async function rows(table: string): Promise<Row[]> {
   if (!columns[table]) throw new Error("Danh mục không hợp lệ.");
   const supabase = client();
-  if (!supabase) return all(table);
+  if (!supabase) return (await localStore()).all(table);
   const { data, error } = await supabase
     .from("erp_records")
     .select("payload")
@@ -131,9 +124,11 @@ export async function byId(
 ): Promise<Row | undefined> {
   if (!columns[table]) throw new Error("Danh mục không hợp lệ.");
   const supabase = client();
-  if (!supabase)
+  if (!supabase) {
+    const { db } = await localStore();
     return db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id) as
       Row | undefined;
+  }
   const { data, error } = await supabase
     .from("erp_records")
     .select("payload")
@@ -147,7 +142,7 @@ export async function byId(
 export async function addRow(table: string, row: Row) {
   if (!columns[table]) throw new Error("Danh mục không hợp lệ.");
   const supabase = client();
-  if (!supabase) return insert(table, row);
+  if (!supabase) return (await localStore()).insert(table, row);
   const { error } = await supabase
     .from("erp_records")
     .insert({ id: String(row.id), table_name: table, payload: row });
@@ -158,6 +153,7 @@ export async function deleteRow(table: string, id: string) {
   if (!columns[table]) throw new Error("Danh mục không hợp lệ.");
   const supabase = client();
   if (!supabase) {
+    const { db } = await localStore();
     db.prepare(`DELETE FROM ${table} WHERE id=?`).run(id);
     return;
   }
@@ -189,6 +185,7 @@ export async function updateRow(
     check(error);
     return data === true;
   }
+  const { db, update } = await localStore();
   db.exec("BEGIN IMMEDIATE");
   try {
     const current = db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id) as
@@ -211,7 +208,7 @@ export async function updateRow(
 
 export async function userByEmail(email: string): Promise<Row | undefined> {
   const supabase = client();
-  if (!supabase) return getUserByEmail(email);
+  if (!supabase) return (await localStore()).getUserByEmail(email);
   const users = await rows("users");
   return users.find(
     (user) => String(user.email).toLowerCase() === email.toLowerCase(),
@@ -223,7 +220,7 @@ export async function registerUser(
   email: string,
   password: string,
 ) {
-  if (!client()) return createUser(name, email, password);
+  if (!client()) return (await localStore()).createUser(name, email, password);
   const { scryptSync } = await import("node:crypto");
   const salt = randomBytes(16).toString("hex");
   const user = {
@@ -241,7 +238,7 @@ export async function registerUser(
 
 export async function newSession(userId: string) {
   const supabase = client();
-  if (!supabase) return createSession(userId);
+  if (!supabase) return (await localStore()).createSession(userId);
   const raw = randomBytes(32).toString("hex");
   const token_hash = createHash("sha256").update(raw).digest("hex");
   const { error } = await supabase
@@ -260,7 +257,7 @@ export async function sessionUser(
 ): Promise<Row | undefined> {
   if (!raw) return undefined;
   const supabase = client();
-  if (!supabase) return userFromToken(raw);
+  if (!supabase) return (await localStore()).userFromToken(raw);
   const hash = createHash("sha256").update(raw).digest("hex");
   const { data, error } = await supabase
     .from("erp_sessions")

@@ -276,7 +276,7 @@ export default function Home() {
         cache: "no-store",
         credentials: "same-origin",
       });
-      const j = await r.json().catch(() => ({}));
+      const j = (await r.json().catch(() => ({}))) as Record<string, any>;
       if (!r.ok) {
         setUser(null);
         setData(null);
@@ -309,7 +309,7 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(Object.fromEntries(form)),
     });
-    const j = await r.json();
+    const j = (await r.json()) as Record<string, any>;
     setNotice(j.message || j.error || "");
     if (r.ok && authMode === "login") load();
   }
@@ -663,7 +663,7 @@ function SheetWorkspace({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ table: sheet, changes }),
       });
-      const body = await response.json();
+      const body = (await response.json()) as Record<string, any>;
       if (!response.ok)
         syncError = new Error(
           body.error || "Đồng bộ Google Sheets thất bại.",
@@ -872,7 +872,7 @@ function AttendanceSheet({
     });
     setSaving(null);
     if (!response.ok) {
-      setNotice((await response.json()).error || "Không thể lưu chấm công.");
+      setNotice(((await response.json()) as Record<string, any>).error || "Không thể lưu chấm công.");
     } else if (current) {
       setLocalAttendance((items) =>
         items.map((item) =>
@@ -880,10 +880,10 @@ function AttendanceSheet({
         ),
       );
     } else {
-      const saved = await response
+      const saved = (await response
         .clone()
         .json()
-        .catch(() => null);
+        .catch(() => null)) as Record<string, any> | null;
       if (saved?.row) setLocalAttendance((items) => [...items, saved.row]);
     }
   }
@@ -906,7 +906,7 @@ function AttendanceSheet({
       }),
     });
     if (!response.ok) {
-      setNotice((await response.json()).error || "Không thể lưu tiền lương.");
+      setNotice(((await response.json()) as Record<string, any>).error || "Không thể lưu tiền lương.");
     } else {
       setLocalEmployees((items) =>
         items.map((item) =>
@@ -1395,7 +1395,7 @@ function ModuleView({
       }),
     });
     if (!response.ok)
-      setNotice((await response.json()).error || "Không thể lưu thay đổi.");
+      setNotice(((await response.json()) as Record<string, any>).error || "Không thể lưu thay đổi.");
     else await reload(false);
   }
 
@@ -1416,7 +1416,7 @@ function ModuleView({
       body: JSON.stringify({ action: "add", table: module, data }),
     });
     if (!response.ok) {
-      setNotice((await response.json()).error || "Không thể thêm dữ liệu.");
+      setNotice(((await response.json()) as Record<string, any>).error || "Không thể thêm dữ liệu.");
       return;
     }
     setAdding(false);
@@ -1431,7 +1431,7 @@ function ModuleView({
         method: "POST",
         body: new FormData(event.currentTarget),
       });
-      const body = await response.json();
+      const body = (await response.json()) as Record<string, any>;
       if (!response.ok) {
         setNotice(body.error || "Tải ảnh thất bại.");
         return;
@@ -1462,7 +1462,7 @@ function ModuleView({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", table: module, id }),
     });
-    const body = await response.json();
+    const body = (await response.json()) as Record<string, any>;
     setNotice(response.ok ? "Đã xóa dữ liệu." : body.error || "Không thể xóa.");
     setOpenMenu(null);
     if (response.ok) await reload(false);

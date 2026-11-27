@@ -1364,9 +1364,11 @@ function ModuleView({
   const [uploading, setUploading] = useState(false);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  const [localRows, setLocalRows] = useState(rows);
+  useEffect(() => setLocalRows(rows), [rows]);
   const shown = useMemo(
     () =>
-      rows.filter(
+      localRows.filter(
         (row) =>
           !query ||
           Object.values(row).some((v) =>
@@ -1375,7 +1377,7 @@ function ModuleView({
               .includes(query.toLowerCase()),
           ),
       ),
-    [rows, query],
+    [localRows, query],
   );
   const cols = columns[module] || [];
   const readOnly = module === "payroll";
@@ -1390,13 +1392,21 @@ function ModuleView({
         action: "update",
         table: module,
         id,
-        expected: { [key]: rows.find((r) => r.id === id)?.[key] ?? null },
+        expected: { [key]: localRows.find((r) => r.id === id)?.[key] ?? null },
         changes: { [key]: numeric ? Number(value) : value },
       }),
     });
     if (!response.ok)
       setNotice(((await response.json()) as Record<string, any>).error || "Không thể lưu thay đổi.");
-    else await reload(false);
+    else {
+      const nextValue = numeric ? Number(value) : value;
+      setLocalRows((items) =>
+        items.map((row) =>
+          row.id === id ? { ...row, [key]: nextValue } : row,
+        ),
+      );
+      setNotice("Đã lưu thay đổi.");
+    }
   }
 
   async function add(event: FormEvent<HTMLFormElement>) {
@@ -1415,12 +1425,14 @@ function ModuleView({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "add", table: module, data }),
     });
+    const body = (await response.json().catch(() => ({}))) as Record<string, any>;
     if (!response.ok) {
-      setNotice(((await response.json()) as Record<string, any>).error || "Không thể thêm dữ liệu.");
+      setNotice(body.error || "Không thể thêm dữ liệu.");
       return;
     }
     setAdding(false);
-    await reload(false);
+    if (body.row) setLocalRows((items) => [body.row, ...items]);
+    else await reload(false);
   }
 
   async function upload(event: FormEvent<HTMLFormElement>) {
@@ -1447,12 +1459,22 @@ function ModuleView({
   }
 
   async function approve(id: string) {
-    await fetch("/api/erp", {
+    const response = await fetch("/api/erp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "approveUser", id }),
     });
-    await reload(false);
+    if (response.ok) {
+      setLocalRows((items) =>
+        items.map((row) =>
+          row.id === id ? { ...row, status: "APPROVED" } : row,
+        ),
+      );
+      setNotice("Đã duyệt tài khoản.");
+    } else {
+      const body = (await response.json().catch(() => ({}))) as Record<string, any>;
+      setNotice(body.error || "Không thể duyệt tài khoản.");
+    }
   }
 
   async function remove(id: string) {
@@ -1465,7 +1487,7 @@ function ModuleView({
     const body = (await response.json()) as Record<string, any>;
     setNotice(response.ok ? "Đã xóa dữ liệu." : body.error || "Không thể xóa.");
     setOpenMenu(null);
-    if (response.ok) await reload(false);
+    if (response.ok) setLocalRows((items) => items.filter((row) => row.id !== id));
   }
 
   function exportCsv() {
